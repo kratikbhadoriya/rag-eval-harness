@@ -24,6 +24,10 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 
 When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONNX all-MiniLM-L6-v2. On first real use it downloads the model (~80 MB) once to `~/.cache/chroma/onnx_models/all-MiniLM-L6-v2/`, so that first call needs network; later runs are offline. `.env` is loaded lazily inside the embedder, never at import. Tests never trigger the download: they stub the model class or pass the fake embedder.
 
+## Collections
+
+`retrieve` from a collection that was never ingested raises `ValueError` (a visible mistake); an existing collection with no matches returns `[]`. Collection names must be 3+ characters (Chroma rule).
+
 ## Agent skills
 
 ### Issue tracker

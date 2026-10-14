@@ -4,6 +4,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from rageval import ingest, retrieve
 
 Embed = Callable[[list[str]], list[list[float]]]
@@ -49,3 +51,38 @@ def test_multi_page_chunks_never_span_pages(
 def test_path_accepts_string(single_pdf: Path, chroma_dir: Path, fake_embed: Embed) -> None:
     assert ingest([str(single_pdf)], collection="docs", embed=fake_embed) == 1
     assert [r["chunk_id"] for r in _all_chunks(fake_embed, "docs")] == ["single.pdf:1:0"]
+
+
+def test_reingest_leaves_chunk_count_unchanged(
+    multi_pdf: Path, chroma_dir: Path, fake_embed: Embed
+) -> None:
+    first = ingest([multi_pdf], embed=fake_embed)
+    before = sorted(r["chunk_id"] for r in _all_chunks(fake_embed))
+    assert ingest([multi_pdf], embed=fake_embed) == first
+    assert sorted(r["chunk_id"] for r in _all_chunks(fake_embed)) == before
+
+
+def test_multiple_paths_in_one_call_are_all_counted(
+    single_pdf: Path, multi_pdf: Path, chroma_dir: Path, fake_embed: Embed
+) -> None:
+    n = ingest([single_pdf, multi_pdf], embed=fake_embed)
+    got = _all_chunks(fake_embed)
+    assert n == len(got)
+    assert {r["source"] for r in got} == {"single.pdf", "multi.pdf"}
+
+
+def test_collections_are_isolated(
+    single_pdf: Path, multi_pdf: Path, chroma_dir: Path, fake_embed: Embed
+) -> None:
+    ingest([single_pdf], collection="alpha", embed=fake_embed)
+    ingest([multi_pdf], collection="beta", embed=fake_embed)
+    assert {r["source"] for r in _all_chunks(fake_embed, "alpha")} == {"single.pdf"}
+    assert {r["source"] for r in _all_chunks(fake_embed, "beta")} == {"multi.pdf"}
+
+
+def test_retrieve_from_never_ingested_collection_raises_clear_error(
+    single_pdf: Path, chroma_dir: Path, fake_embed: Embed
+) -> None:
+    ingest([single_pdf], collection="alpha", embed=fake_embed)
+    with pytest.raises(ValueError, match="never ingested"):
+        retrieve("cats", k=3, collection="missing", embed=fake_embed)
