@@ -1,3 +1,25 @@
+## Stack
+
+Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters, litellm (Groq, generation later), ruff, strict mypy, pytest, pre-commit.
+
+## Layout
+
+- `src/rageval/ingest.py`, `retrieve.py`: plain functions over plain dicts
+- `src/rageval/generate.py`, `eval.py`: stubs for later sessions
+- `tests/`: offline tests with a fake embedder and small fixture PDFs
+- `metrics.md`: metrics log; `GLOSSARY.md`: domain terms
+
+## Commands
+
+- `make install`, `make lint`, `make fmt`, `make typecheck`, `make test`, `make check`
+
+## Rules
+
+1. Functions take and return plain dicts and ints. Reason: keeps the contract trivially testable and framework-free.
+2. No framework wrappers (LangChain chains/retrievers) around retrieval. Reason: they hide what is being measured.
+3. Every metric change gets a row in `metrics.md`. Reason: quality changes must stay traceable.
+4. Tests run with no network and no API keys; inject the fake embedder. Reason: CI is fast, free and deterministic.
+
 ## Agent skills
 
 ### Issue tracker
