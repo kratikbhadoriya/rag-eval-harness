@@ -8,6 +8,8 @@ import chromadb
 import pymupdf
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from rageval.embed import default_embed
+
 CHUNK_SIZE = 2000
 CHUNK_OVERLAP = 400
 
@@ -20,8 +22,7 @@ def ingest(
     embed: Embedder | None = None,
 ) -> int:
     """Chunk PDFs page by page, embed and store them. Returns the number of chunks stored."""
-    if embed is None:
-        raise NotImplementedError("default embedder is not implemented yet")
+    embed = embed or default_embed
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, length_function=len
     )

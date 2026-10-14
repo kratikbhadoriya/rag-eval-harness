@@ -20,6 +20,10 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 3. Every metric change gets a row in `metrics.md`. Reason: quality changes must stay traceable.
 4. Tests run with no network and no API keys; inject the fake embedder. Reason: CI is fast, free and deterministic.
 
+## Default embedder
+
+When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONNX all-MiniLM-L6-v2. On first real use it downloads the model (~80 MB) once to `~/.cache/chroma/onnx_models/all-MiniLM-L6-v2/`, so that first call needs network; later runs are offline. `.env` is loaded lazily inside the embedder, never at import. Tests never trigger the download: they stub the model class or pass the fake embedder.
+
 ## Agent skills
 
 ### Issue tracker
