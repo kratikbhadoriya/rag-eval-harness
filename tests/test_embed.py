@@ -11,7 +11,7 @@ import pytest
 from chromadb.utils.embedding_functions import onnx_mini_lm_l6_v2
 
 from rageval import embed as embed_module
-from rageval import ingest
+from rageval import ingest, retrieve
 
 
 class StubModel:
@@ -42,6 +42,18 @@ def test_ingest_without_embed_uses_bundled_model(
     got = col.get(include=["embeddings"])
     assert got["embeddings"] is not None
     assert list(got["embeddings"][0]) == pytest.approx([0.6, 0.8, 0.0], abs=1e-6)
+
+
+def test_retrieve_without_embed_uses_bundled_model(
+    single_pdf: Path, chroma_dir: Path, stub_model: type[StubModel]
+) -> None:
+    ingest([single_pdf])
+    stub_model.calls = []
+    results = retrieve("do cats purr?", k=1)
+    assert stub_model.calls == [["do cats purr?"]]
+    assert len(results) == 1
+    assert "Cats purr" in results[0]["text"]
+    assert results[0]["score"] == pytest.approx(1.0, abs=1e-5)
 
 
 def test_dotenv_is_loaded_lazily_by_default_embedder(tmp_path: Path) -> None:

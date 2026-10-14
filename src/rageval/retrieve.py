@@ -5,6 +5,7 @@ from typing import Any
 
 import chromadb
 
+from rageval.embed import default_embed
 from rageval.ingest import Embedder
 
 
@@ -19,7 +20,7 @@ def retrieve(
     Each result has chunk_id, text, source, page and score (1 - cosine distance).
     """
     if embed is None:
-        raise NotImplementedError("default embedder is not implemented yet")
+        embed = default_embed
     client = chromadb.PersistentClient(path=os.environ.get("RAGEVAL_CHROMA_DIR", "./.chroma"))
     col = client.get_collection(collection)
     res = col.query(
