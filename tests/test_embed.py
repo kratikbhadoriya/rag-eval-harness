@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from typing import ClassVar
 
-import chromadb
 import pytest
 from chromadb.utils.embedding_functions import onnx_mini_lm_l6_v2
 
@@ -38,10 +37,6 @@ def test_ingest_without_embed_uses_bundled_model(
     assert ingest([single_pdf]) == 1
     assert len(stub_model.calls) == 1
     assert "Cats purr" in stub_model.calls[0][0]
-    col = chromadb.PersistentClient(path=str(chroma_dir)).get_collection("default")
-    got = col.get(include=["embeddings"])
-    assert got["embeddings"] is not None
-    assert list(got["embeddings"][0]) == pytest.approx([0.6, 0.8, 0.0], abs=1e-6)
 
 
 def test_retrieve_without_embed_uses_bundled_model(

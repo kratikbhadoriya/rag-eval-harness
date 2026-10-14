@@ -1,16 +1,25 @@
-"""Smoke test: pytest runs offline with no secrets."""
+"""Smoke tests: the pipeline works offline with no secrets."""
 
 import os
 import socket
+from pathlib import Path
 
-import rageval
+import pytest
+
+from rageval import ingest, retrieve
+from rageval.embed import Embedder
 
 
-def test_package_imports_with_no_network_or_keys() -> None:
+def test_ingest_and_retrieve_need_no_network_or_keys(
+    single_pdf: Path,
+    chroma_dir: Path,
+    fake_embed: Embedder,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("network access attempted")
+
+    monkeypatch.setattr(socket.socket, "connect", refuse)
     assert "GROQ_API_KEY" not in os.environ
-    assert rageval.__name__ == "rageval"
-
-
-def test_network_is_unavailable_or_unneeded() -> None:
-    # Import must not have opened sockets; creating one is still allowed locally.
-    assert socket.gethostname()
+    assert ingest([single_pdf], embed=fake_embed) == 1
+    assert "Cats purr" in retrieve("cats", k=1, embed=fake_embed)[0]["text"]

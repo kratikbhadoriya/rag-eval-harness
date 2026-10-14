@@ -1,15 +1,13 @@
 """Behavior of rageval.retrieve through its public functions."""
 
-from collections.abc import Callable
 from pathlib import Path
 
 from rageval import ingest, retrieve
-
-Embed = Callable[[list[str]], list[list[float]]]
+from rageval.embed import Embedder
 
 
 def test_query_sharing_words_returns_that_chunk_first_with_page(
-    multi_pdf: Path, chroma_dir: Path, fake_embed: Embed
+    multi_pdf: Path, chroma_dir: Path, fake_embed: Embedder
 ) -> None:
     ingest([multi_pdf], embed=fake_embed)
     results = retrieve("Satellites", k=3, embed=fake_embed)
@@ -19,7 +17,7 @@ def test_query_sharing_words_returns_that_chunk_first_with_page(
 
 
 def test_results_have_exact_keys_at_most_k_and_sorted_descending(
-    multi_pdf: Path, chroma_dir: Path, fake_embed: Embed
+    multi_pdf: Path, chroma_dir: Path, fake_embed: Embedder
 ) -> None:
     ingest([multi_pdf], embed=fake_embed)
     results = retrieve("Rivers", k=2, embed=fake_embed)
@@ -32,7 +30,7 @@ def test_results_have_exact_keys_at_most_k_and_sorted_descending(
 
 
 def test_score_is_one_minus_cosine_distance(
-    single_pdf: Path, chroma_dir: Path, fake_embed: Embed
+    single_pdf: Path, chroma_dir: Path, fake_embed: Embedder
 ) -> None:
     ingest([single_pdf], embed=fake_embed)
     text = retrieve("anything", k=1, embed=fake_embed)[0]["text"]
@@ -44,7 +42,7 @@ def test_score_is_one_minus_cosine_distance(
 
 
 def test_k_larger_than_corpus_returns_all(
-    single_pdf: Path, chroma_dir: Path, fake_embed: Embed
+    single_pdf: Path, chroma_dir: Path, fake_embed: Embedder
 ) -> None:
     ingest([single_pdf], embed=fake_embed)
     assert len(retrieve("cats", k=10, embed=fake_embed)) == 1
