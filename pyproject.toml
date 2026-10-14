@@ -1,7 +1,7 @@
 [project]
 name = "rag-eval-harness"
 version = "0.1.0"
-description = "Add your description here"
+description = "Local RAG evaluation harness: ingest PDFs into Chroma, retrieve chunks, measure retrieval quality"
 readme = "README.md"
 authors = [
     { name = "Kratik Bhadoriya", email = "kratikbhadoriya2001@gmail.com" }

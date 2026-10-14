@@ -1,12 +1,11 @@
 """Retrieve the most similar chunks for a query."""
 
-import os
 from typing import Any
 
-import chromadb
+from chromadb.errors import NotFoundError
 
-from rageval.embed import default_embed
-from rageval.ingest import Embedder
+from rageval.embed import Embedder, default_embed
+from rageval.store import chroma_client
 
 
 def retrieve(
@@ -24,15 +23,11 @@ def retrieve(
     """
     if embed is None:
         embed = default_embed
-    client = chromadb.PersistentClient(path=os.environ.get("RAGEVAL_CHROMA_DIR", "./.chroma"))
     try:
-        col = client.get_collection(collection)
-    except Exception as exc:  # chromadb raises NotFoundError / InvalidArgumentError by version
-        existing = {c.name if hasattr(c, "name") else str(c) for c in client.list_collections()}
-        if collection in existing:
-            raise
+        chunks = chroma_client().get_collection(collection)
+    except NotFoundError as exc:
         raise ValueError(f"collection {collection!r} was never ingested") from exc
-    res = col.query(
+    res = chunks.query(
         query_embeddings=embed([query]),  # type: ignore[arg-type]
         n_results=k,
         include=["documents", "metadatas", "distances"],

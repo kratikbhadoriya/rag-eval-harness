@@ -3,10 +3,11 @@
 import hashlib
 import math
 import re
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+
+from rageval.embed import Embedder
 
 DIM = 64
 
@@ -21,7 +22,7 @@ def _embed_one(text: str) -> list[float]:
 
 
 @pytest.fixture
-def fake_embed() -> Callable[[list[str]], list[list[float]]]:
+def fake_embed() -> Embedder:
     """Hashed bag-of-words embedder: shared words mean nearby vectors. No model, no network."""
 
     def embed(texts: list[str]) -> list[list[float]]:
@@ -45,3 +46,9 @@ def single_pdf() -> Path:
 @pytest.fixture
 def multi_pdf() -> Path:
     return Path(__file__).parent / "fixtures" / "multi.pdf"
+
+
+@pytest.fixture(autouse=True)
+def no_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests never see an API key, whatever the developer's environment holds."""
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
