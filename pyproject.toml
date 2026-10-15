@@ -1,0 +1,51 @@
+[project]
+name = "rag-eval-harness"
+version = "0.1.0"
+description = "Local RAG evaluation harness: ingest PDFs into Chroma, retrieve chunks, measure retrieval quality"
+readme = "README.md"
+authors = [
+    { name = "Kratik Bhadoriya", email = "kratikbhadoriya2001@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.5.9",
+    "langchain-text-splitters>=1.1.3",
+    "litellm>=1.105.1",
+    "pymupdf>=1.28.2",
+    "python-dotenv>=1.2.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "rageval"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pre-commit>=4.7.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+files = ["src"]
+python_version = "3.12"
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
