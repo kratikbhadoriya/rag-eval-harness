@@ -1,4 +1,4 @@
-.PHONY: install lint fmt typecheck test check eval gate
+.PHONY: install lint fmt typecheck test check ingest eval gate
 
 install:
 	uv sync --group dev
@@ -18,6 +18,9 @@ test:
 	env -u GROQ_API_KEY uv run pytest
 
 check: lint typecheck test
+
+ingest:
+	uv run python -c "from pathlib import Path; from rageval.ingest import ingest; print(ingest(sorted(Path('data/corpus').glob('*.pdf'))), 'chunks')"
 
 gate:
 	uv run python -m rageval.gate
