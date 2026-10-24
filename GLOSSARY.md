@@ -25,5 +25,13 @@ How similar a chunk is to a query, where higher means more similar.
 _Avoid_: Distance, relevance, confidence
 
 **Golden set**:
-The hand-written questions, each paired with the chunks that should answer it, used to measure the harness.
+The hand-written questions, each paired with a reference answer and the source pages that support it, used to measure the harness. Frozen once written.
 _Avoid_: Test set, benchmark, eval data
+
+**Frozen corpus**:
+The Corpus as checksummed in `data/corpus/SHA256SUMS`; it never changes, so scores stay comparable across weeks.
+_Avoid_: Snapshot, fixture
+
+**Unanswerable question**:
+A golden-set question the Corpus cannot answer, where the correct response is to say so.
+_Avoid_: Negative, trick question, out-of-scope
