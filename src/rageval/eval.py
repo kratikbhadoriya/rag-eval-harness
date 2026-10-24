@@ -57,6 +57,36 @@ def _load_golden(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines if line.strip()]
 
 
+def sample_rows(rows: list[dict[str, Any]], n: int | None) -> list[dict[str, Any]]:
+    """Deterministic slice of the Golden set: stratified by type, ordered by id, no randomness.
+
+    `n` of None or >= len(rows) returns every row. Otherwise each type gets a share of `n`
+    proportional to its size (largest remainder, ties by type name); within a type, rows are
+    picked evenly spaced over id order. Unanswerable rows keep at least one slot when n >= 2, so
+    the Refusal check stays meaningful (the slot is taken from the largest other share).
+    """
+    ordered = sorted(rows, key=lambda r: r["id"])
+    if n is None or n >= len(ordered):
+        return ordered
+    n = max(n, 0)
+    strata: dict[str, list[dict[str, Any]]] = {}
+    for r in ordered:
+        strata.setdefault(str(r.get("type")), []).append(r)
+    total = len(ordered)
+    quota = {t: n * len(g) // total for t, g in strata.items()}
+    by_remainder = sorted(strata, key=lambda t: (-(n * len(strata[t]) % total), t))
+    for t in by_remainder[: n - sum(quota.values())]:
+        quota[t] += 1
+    if "unanswerable" in strata and n >= 2 and quota["unanswerable"] == 0:
+        donor = max((t for t in strata if t != "unanswerable"), key=lambda t: (quota[t], t))
+        quota[donor] -= 1
+        quota["unanswerable"] = 1
+    picked = [
+        g[i * len(g) // quota[t]] for t, g in strata.items() if quota[t] for i in range(quota[t])
+    ]
+    return sorted(picked, key=lambda r: r["id"])
+
+
 def _score(
     sample: dict[str, Any], judge: Judge, sample_id: str, tally: dict[str, Any]
 ) -> dict[str, float]:
@@ -90,9 +120,9 @@ def run(
 ) -> dict[str, Any]:
     """Evaluate the answerable Golden set rows and return the results dict.
 
-    `sample` is accepted for the stratified sampling of a later ticket; for now all answerable
-    rows are always scored. Unanswerable rows go through the generator only (never the Judge) and
-    are counted in `skipped_unanswerable` and `refusal`.
+    `sample` limits the Golden set with `sample_rows` (None runs everything).
+    Unanswerable rows go through the generator only (never the Judge) and are
+    counted in `skipped_unanswerable` and `refusal`.
 
     Results: k, sample, metrics (mean per metric), samples (id, type, question, answer (raw),
     contexts, reference, one score per metric), nan_count, judge_tokens {input, output},
@@ -109,7 +139,7 @@ def run(
     if judge is None:
         judge = ragas_judge()
     tally: dict[str, Any] = {"input": 0, "output": 0, "cost": 0.0, "nan": 0}
-    rows = _load_golden(golden_path)
+    rows = sample_rows(_load_golden(golden_path), sample)
     answerable = [r for r in rows if r.get("type") != "unanswerable"]
     samples: list[dict[str, Any]] = []
     for row in answerable:
@@ -257,7 +287,7 @@ def main(
     parser = argparse.ArgumentParser(prog="rageval.eval", description=__doc__)
     parser.add_argument("--golden", type=Path, default=Path("golden/golden.jsonl"))
     parser.add_argument("--k", type=int, default=5)
-    parser.add_argument("--sample", type=int, default=None, help="accepted; not yet implemented")
+    parser.add_argument("--sample", type=int, default=None, help="score n rows (stratified)")
     parser.add_argument("--collection", default="default")
     parser.add_argument("--out-dir", type=Path, default=Path("."))
     args = parser.parse_args(argv)
@@ -272,8 +302,6 @@ def main(
             f"error: missing {', '.join(missing)} (set in .env or the environment)", file=sys.stderr
         )
         return 2
-    if args.sample is not None:
-        print("note: --sample is not implemented yet; running all answerable rows", file=sys.stderr)
     try:
         results = run(args.golden, args.k, args.sample, generator, judge, args.collection)
     except JudgeError as exc:

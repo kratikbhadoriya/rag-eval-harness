@@ -185,3 +185,62 @@ def test_cli_reports_missing_keys_clearly(
     monkeypatch.chdir(tmp_path)  # no .env here
     assert main(["--golden", str(_write_golden(tmp_path))]) == 2
     assert "OPENAI_API_KEY" in capsys.readouterr().err
+
+
+def _rows() -> list[dict[str, Any]]:
+    counts = {"factual": 13, "multi_hop": 7, "comparative": 5, "unanswerable": 5}
+    rows = [
+        {"id": f"{t[0]}{i:02d}", "question": f"{t}{i}?", "reference_answer": "r", "type": t}
+        for t, c in counts.items()
+        for i in range(1, c + 1)
+    ]
+    return rows[::-1]  # shuffled input order must not matter
+
+
+def _types(rows: list[dict[str, Any]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for r in rows:
+        out[r["type"]] = out.get(r["type"], 0) + 1
+    return out
+
+
+def test_sample_rows_is_deterministic_and_ordered_by_id() -> None:
+    from rageval.eval import sample_rows
+
+    a, b = sample_rows(_rows(), 10), sample_rows(list(reversed(_rows())), 10)
+    assert a == b
+    assert [r["id"] for r in a] == sorted(r["id"] for r in a)
+
+
+def test_sample_rows_stratifies_by_type_with_unanswerable() -> None:
+    from rageval.eval import sample_rows
+
+    assert _types(sample_rows(_rows(), 10)) == {
+        "factual": 4,
+        "multi_hop": 2,
+        "comparative": 2,
+        "unanswerable": 2,
+    }
+    # n=3 would round unanswerable to 0; one is still kept
+    got = _types(sample_rows(_rows(), 3))
+    assert sum(got.values()) == 3 and got["unanswerable"] == 1
+
+
+def test_sample_rows_runs_everything_when_n_covers_total_or_omitted() -> None:
+    from rageval.eval import sample_rows
+
+    full = sorted(_rows(), key=lambda r: r["id"])
+    assert sample_rows(_rows(), None) == full
+    assert sample_rows(_rows(), 30) == full
+    assert sample_rows(_rows(), 99) == full
+
+
+def test_run_samples_golden_rows(tmp_path: Path) -> None:
+    gen, judge = FakeGenerator(), FakeJudge()
+    path = tmp_path / "g.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in _rows()) + "\n")
+    res = run(path, k=2, sample=10, generator=gen, judge=judge)
+    assert res["sample"] == 10
+    assert len(res["samples"]) == 8
+    assert res["refusal"]["total"] == 2
+    assert res["skipped_unanswerable"] == 2
