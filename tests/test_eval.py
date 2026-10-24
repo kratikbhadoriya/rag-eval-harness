@@ -175,6 +175,47 @@ def test_cli_fails_naming_sample_and_still_prints_totals(
     assert code == 1
     assert "f02" in captured.err
     assert "Judge tokens: 300 in, 30 out" in captured.out
+    assert "metrics" not in json.loads((tmp_path / "out" / "results.json").read_text())
+
+
+def test_cli_judge_failure_replaces_stale_results_with_failure_marker(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "results.json").write_text('{"metrics": {"faithfulness": 1.0}}')
+    (out / "results.md").write_text("stale")
+    code = main(
+        ["--golden", str(_write_golden(tmp_path)), "--out-dir", str(out)],
+        generator=FakeGenerator(),
+        judge=FakeJudge(always_nan=("Q3?",)),
+    )
+    assert code == 1
+    assert not (out / "results.md").exists()
+    written = json.loads((out / "results.json").read_text())
+    assert written.pop("judge_cost_usd") == pytest.approx(0.003)
+    assert written == {
+        "failed_sample": "f02",
+        "nan_count": 2,
+        "judge_tokens": {"input": 300, "output": 30},
+    }
+
+
+class UningestedGenerator:
+    def __call__(self, question: str, k: int) -> dict[str, Any]:
+        raise ValueError("collection 'default' has not been ingested")
+
+
+def test_cli_never_ingested_collection_exits_2_with_ingest_hint(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(
+        ["--golden", str(_write_golden(tmp_path)), "--out-dir", str(tmp_path / "out")],
+        generator=UningestedGenerator(),
+        judge=FakeJudge(),
+    )
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "make ingest" in captured.err
+    assert "Traceback" not in captured.err
     assert not (tmp_path / "out" / "results.json").exists()
 
 
@@ -244,3 +285,18 @@ def test_run_samples_golden_rows(tmp_path: Path) -> None:
     assert len(res["samples"]) == 8
     assert res["refusal"]["total"] == 2
     assert res["skipped_unanswerable"] == 2
+
+
+def test_results_record_rows_total_and_rows_scored(tmp_path: Path) -> None:
+    full = run(_write_golden(tmp_path), k=2, generator=FakeGenerator(), judge=FakeJudge())
+    assert (full["rows_total"], full["rows_scored"]) == (3, 3)
+    part = run(_write_golden(tmp_path), k=2, sample=2, generator=FakeGenerator(), judge=FakeJudge())
+    assert (part["rows_total"], part["rows_scored"]) == (3, 2)
+
+
+def test_judge_model_differs_from_generator_model() -> None:
+    from rageval.eval import JUDGE_MODEL
+    from rageval.generate import DEFAULT_MODEL
+
+    assert JUDGE_MODEL != DEFAULT_MODEL
+    assert JUDGE_MODEL.split("/")[-1] != DEFAULT_MODEL.split("/")[-1]

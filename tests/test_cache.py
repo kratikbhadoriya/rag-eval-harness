@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from rageval.cache import cached_retriever
-from rageval.embed import Embedder
+from rageval.cache import cached_retriever, corpus_checksum, embedder_name
+from rageval.embed import Embedder, default_embed
 from rageval.generate import generate
 from rageval.ingest import ingest
 
@@ -99,3 +99,12 @@ def test_generation_is_never_cached(env: tuple[Path, CountingEmbedder]) -> None:
     assert emb.calls == 1
     assert len(calls) == 2
     assert (a["answer"], b["answer"]) == ("answer 1", "answer 2")
+
+
+def test_missing_corpus_dir_raises_clear_error(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="corpus"):
+        corpus_checksum(tmp_path / "nope")
+
+
+def test_default_embedder_name_includes_model_identity() -> None:
+    assert "all-MiniLM-L6-v2" in embedder_name(default_embed)

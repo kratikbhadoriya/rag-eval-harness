@@ -36,11 +36,22 @@ _CITATION = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
 class JudgeError(RuntimeError):
     """The Judge returned NaN for a sample even after one retry.
 
-    `input_tokens`, `output_tokens` and `cost` hold what the run had spent when it failed.
+    `sample_id` names the failing sample; `nan_count`, `input_tokens`, `output_tokens` and `cost`
+    hold what the run had seen and spent when it failed.
     """
 
-    def __init__(self, message: str, input_tokens: int, output_tokens: int, cost: float) -> None:
+    def __init__(
+        self,
+        message: str,
+        sample_id: str,
+        nan_count: int,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+    ) -> None:
         super().__init__(message)
+        self.sample_id = sample_id
+        self.nan_count = nan_count
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.cost = cost
@@ -57,57 +68,63 @@ def _load_golden(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines if line.strip()]
 
 
-def sample_rows(rows: list[dict[str, Any]], n: int | None) -> list[dict[str, Any]]:
+def sample_rows(rows: list[dict[str, Any]], size: int | None) -> list[dict[str, Any]]:
     """Deterministic slice of the Golden set: stratified by type, ordered by id, no randomness.
 
-    `n` of None or >= len(rows) returns every row. Otherwise each type gets a share of `n`
+    `size` of None or >= len(rows) returns every row. Otherwise each type gets a share of `size`
     proportional to its size (largest remainder, ties by type name); within a type, rows are
-    picked evenly spaced over id order. Unanswerable rows keep at least one slot when n >= 2, so
+    picked evenly spaced over id order. Unanswerable rows keep at least one slot when size >= 2, so
     the Refusal check stays meaningful (the slot is taken from the largest other share).
     """
-    ordered = sorted(rows, key=lambda r: r["id"])
-    if n is None or n >= len(ordered):
+    ordered = sorted(rows, key=lambda row: row["id"])
+    if size is None or size >= len(ordered):
         return ordered
-    n = max(n, 0)
+    size = max(size, 0)
     strata: dict[str, list[dict[str, Any]]] = {}
-    for r in ordered:
-        strata.setdefault(str(r.get("type")), []).append(r)
+    for row in ordered:
+        strata.setdefault(str(row.get("type")), []).append(row)
     total = len(ordered)
-    quota = {t: n * len(g) // total for t, g in strata.items()}
-    by_remainder = sorted(strata, key=lambda t: (-(n * len(strata[t]) % total), t))
-    for t in by_remainder[: n - sum(quota.values())]:
-        quota[t] += 1
-    if "unanswerable" in strata and n >= 2 and quota["unanswerable"] == 0:
-        donor = max((t for t in strata if t != "unanswerable"), key=lambda t: (quota[t], t))
+    quota = {kind: size * len(group) // total for kind, group in strata.items()}
+    by_remainder = sorted(strata, key=lambda kind: (-(size * len(strata[kind]) % total), kind))
+    for kind in by_remainder[: size - sum(quota.values())]:
+        quota[kind] += 1
+    if "unanswerable" in strata and size >= 2 and quota["unanswerable"] == 0:
+        donor = max(
+            (kind for kind in strata if kind != "unanswerable"),
+            key=lambda kind: (quota[kind], kind),
+        )
         quota[donor] -= 1
         quota["unanswerable"] = 1
     picked = [
-        g[i * len(g) // quota[t]] for t, g in strata.items() if quota[t] for i in range(quota[t])
+        group[i * len(group) // quota[kind]]
+        for kind, group in strata.items()
+        if quota[kind]
+        for i in range(quota[kind])
     ]
-    return sorted(picked, key=lambda r: r["id"])
+    return sorted(picked, key=lambda row: row["id"])
 
 
 def _score(
     sample: dict[str, Any], judge: Judge, sample_id: str, tally: dict[str, Any]
 ) -> dict[str, float]:
     """Judge one sample, retrying once on NaN; tokens and cost of every attempt are tallied."""
-    for attempt in (1, 2):
+    for _attempt in (1, 2):
         out = judge(sample)
         tally["input"] += int(out.get("input_tokens", 0))
         tally["output"] += int(out.get("output_tokens", 0))
         tally["cost"] += float(out.get("cost", 0.0))
-        scores = {m: float(out[m]) for m in METRICS}
-        if not any(math.isnan(v) for v in scores.values()):
+        scores = {metric: float(out[metric]) for metric in METRICS}
+        if not any(math.isnan(value) for value in scores.values()):
             return scores
         tally["nan"] += 1
-        if attempt == 2:
-            raise JudgeError(
-                f"Judge returned NaN twice for sample {sample_id!r}",
-                tally["input"],
-                tally["output"],
-                tally["cost"],
-            )
-    raise AssertionError("unreachable")
+    raise JudgeError(
+        f"Judge returned NaN twice for sample {sample_id!r}",
+        sample_id,
+        tally["nan"],
+        tally["input"],
+        tally["output"],
+        tally["cost"],
+    )
 
 
 def run(
@@ -124,7 +141,8 @@ def run(
     Unanswerable rows go through the generator only (never the Judge) and are
     counted in `skipped_unanswerable` and `refusal`.
 
-    Results: k, sample, metrics (mean per metric), samples (id, type, question, answer (raw),
+    Results: k, sample, rows_total (Golden set size), rows_scored, metrics (mean per metric),
+    samples (id, type, question, answer (raw),
     contexts, reference, one score per metric), nan_count, judge_tokens {input, output},
     judge_cost_usd, skipped_unanswerable, refusal {count, total} (answers with REFUSAL_PHRASE).
 
@@ -139,7 +157,8 @@ def run(
     if judge is None:
         judge = ragas_judge()
     tally: dict[str, Any] = {"input": 0, "output": 0, "cost": 0.0, "nan": 0}
-    rows = sample_rows(_load_golden(golden_path), sample)
+    golden = _load_golden(golden_path)
+    rows = sample_rows(golden, sample)
     answerable = [r for r in rows if r.get("type") != "unanswerable"]
     samples: list[dict[str, Any]] = []
     for row in answerable:
@@ -175,6 +194,8 @@ def run(
     return {
         "k": k,
         "sample": sample,
+        "rows_total": len(golden),
+        "rows_scored": len(rows),
         "metrics": means,
         "samples": samples,
         "nan_count": tally["nan"],
@@ -187,7 +208,7 @@ def run(
 
 def format_markdown(results: dict[str, Any]) -> str:
     """Render a results dict as the results.md text. Pure: no I/O."""
-    m = results["metrics"]
+    means = results["metrics"]
     tokens = results["judge_tokens"]
     lines = [
         "# Evaluation results",
@@ -197,8 +218,8 @@ def format_markdown(results: dict[str, Any]) -> str:
         "",
         "| Metric | Mean |",
         "| --- | --- |",
-        f"| Faithfulness | {m['faithfulness']:.3f} |",
-        f"| Context recall | {m['context_recall']:.3f} |",
+        f"| Faithfulness | {means['faithfulness']:.3f} |",
+        f"| Context recall | {means['context_recall']:.3f} |",
         "",
         "| Id | Type | Faithfulness | Context recall |",
         "| --- | --- | --- | --- |",
@@ -279,6 +300,19 @@ def _print_totals(input_tokens: int, output_tokens: int, cost: float) -> None:
     print(f"Judge tokens: {input_tokens} in, {output_tokens} out; cost ${cost:.4f}")
 
 
+def _write_failure(out_dir: Path, exc: JudgeError) -> None:
+    """Replace any earlier results with a metric-free failure marker, so the gate fails."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "results.md").unlink(missing_ok=True)
+    marker = {
+        "failed_sample": exc.sample_id,
+        "nan_count": exc.nan_count,
+        "judge_tokens": {"input": exc.input_tokens, "output": exc.output_tokens},
+        "judge_cost_usd": exc.cost,
+    }
+    (out_dir / "results.json").write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
+
+
 def main(
     argv: list[str] | None = None,
     generator: Generator | None = None,
@@ -307,14 +341,23 @@ def main(
     except JudgeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         _print_totals(exc.input_tokens, exc.output_tokens, exc.cost)
+        _write_failure(args.out_dir, exc)
         return 1
+    except json.JSONDecodeError:
+        raise
+    except ValueError as exc:
+        print(
+            f"error: {exc}\nrun `make ingest` first (collection {args.collection!r} has no chunks)",
+            file=sys.stderr,
+        )
+        return 2
     args.out_dir.mkdir(parents=True, exist_ok=True)
     (args.out_dir / "results.json").write_text(
         json.dumps(results, indent=2) + "\n", encoding="utf-8"
     )
     (args.out_dir / "results.md").write_text(format_markdown(results), encoding="utf-8")
-    t = results["judge_tokens"]
-    _print_totals(t["input"], t["output"], results["judge_cost_usd"])
+    tokens = results["judge_tokens"]
+    _print_totals(tokens["input"], tokens["output"], results["judge_cost_usd"])
     return 0
 
 

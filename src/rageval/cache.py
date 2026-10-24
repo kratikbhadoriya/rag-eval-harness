@@ -27,11 +27,13 @@ def cache_dir() -> Path:
 
 def corpus_checksum(corpus_dir: Path) -> str:
     """SHA-256 over the relative names and bytes of every file under corpus_dir, sorted."""
-    h = hashlib.sha256()
+    if not corpus_dir.is_dir():
+        raise FileNotFoundError(f"corpus directory not found: {corpus_dir}")
+    digest = hashlib.sha256()
     for path in sorted(p for p in corpus_dir.rglob("*") if p.is_file()):
-        h.update(path.relative_to(corpus_dir).as_posix().encode() + b"\0")
-        h.update(path.read_bytes() + b"\0")
-    return h.hexdigest()
+        digest.update(path.relative_to(corpus_dir).as_posix().encode() + b"\0")
+        digest.update(path.read_bytes() + b"\0")
+    return digest.hexdigest()
 
 
 def embedder_name(embed: Embedder) -> str:
@@ -55,7 +57,7 @@ def cached_retriever(
     (and so the embedder) and stores the result.
     """
     embed = embed or default_embed
-    base = {
+    key_parts = {
         "collection": collection,
         "chunk_size": chunk_size,
         "chunk_overlap": chunk_overlap,
@@ -64,7 +66,7 @@ def cached_retriever(
     }
 
     def fetch(question: str, k: int) -> list[dict[str, Any]]:
-        key = json.dumps({**base, "question": question, "k": k}, sort_keys=True)
+        key = json.dumps({**key_parts, "question": question, "k": k}, sort_keys=True)
         path = cache_dir() / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
         if path.exists():
             return list(json.loads(path.read_text(encoding="utf-8")))

@@ -14,6 +14,8 @@ def _results(faith: float = 0.9, recall: float = 0.9, refusals: int = 5) -> dict
     return {
         "metrics": {"faithfulness": faith, "context_recall": recall, "answer_relevancy": 0.0},
         "refusal": {"count": refusals, "total": 5},
+        "rows_total": 30,
+        "rows_scored": 30,
     }
 
 
@@ -81,6 +83,21 @@ def test_missing_threshold_fails() -> None:
     out = check(_results(), {"faithfulness": 0.8})
     assert not out["passed"]
     assert len(out["reasons"]) == 2
+
+
+def test_partial_run_fails() -> None:
+    res = _results() | {"sample": 10, "rows_scored": 10}
+    out = check(res, THRESHOLDS)
+    assert not out["passed"]
+    assert "partial" in out["reasons"][0] and "10 of 30" in out["reasons"][0]
+
+
+def test_results_without_row_counts_fail() -> None:
+    res = _results()
+    del res["rows_total"], res["rows_scored"]
+    out = check(res, THRESHOLDS)
+    assert not out["passed"]
+    assert "rows_total" in out["reasons"][0]
 
 
 def _write(tmp_path: Path, results: dict[str, Any]) -> list[str]:

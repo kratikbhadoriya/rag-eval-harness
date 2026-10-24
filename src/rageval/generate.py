@@ -7,6 +7,7 @@ from typing import Any
 
 from dotenv import find_dotenv, load_dotenv
 
+from rageval.cache import Retriever
 from rageval.embed import Embedder
 from rageval.retrieve import retrieve
 
@@ -35,7 +36,7 @@ def build_prompt(question: str, contexts: list[dict[str, Any]]) -> str:
     template = resources.files("rageval").joinpath("prompts", "answer.txt").read_text("utf-8")
     numbered = "\n\n".join(f"[{i}] {c['text']}" for i, c in enumerate(contexts, start=1))
     values = {"contexts": numbered, "question": question}
-    return re.sub(r"\{(contexts|question)\}", lambda m: values[m.group(1)], template)
+    return re.sub(r"\{(contexts|question)\}", lambda match: values[match.group(1)], template)
 
 
 def generate(
@@ -45,7 +46,7 @@ def generate(
     embed: Embedder | None = None,
     completion: Completion | None = None,
     model: str = DEFAULT_MODEL,
-    retriever: Callable[[str, int], list[dict[str, Any]]] | None = None,
+    retriever: Retriever | None = None,
 ) -> dict[str, Any]:
     """Retrieve the top-k chunks and answer from them at temperature 0.
 

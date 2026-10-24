@@ -24,6 +24,15 @@ def _number(value: Any) -> float | None:
 def check(results: dict[str, Any], thresholds: dict[str, Any]) -> dict[str, Any]:
     """Return {"passed": bool, "reasons": [str]}; a missing metric or threshold fails."""
     reasons: list[str] = []
+    scored = _number(results.get("rows_scored"))
+    total = _number(results.get("rows_total"))
+    if scored is None or total is None:
+        reasons.append("rows_total/rows_scored missing from results; cannot tell if run was full")
+    elif scored < total:
+        reasons.append(
+            f"partial run: only {scored:g} of {total:g} Golden set rows were scored "
+            "(run `make eval` without SAMPLE)"
+        )
     metrics = results.get("metrics") or {}
     for name in GATED_METRICS:
         value = _number(metrics.get(name))
