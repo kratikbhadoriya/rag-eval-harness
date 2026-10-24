@@ -1,4 +1,4 @@
-.PHONY: install lint fmt typecheck test check eval
+.PHONY: install lint fmt typecheck test check eval gate
 
 install:
 	uv sync --group dev
@@ -18,6 +18,9 @@ test:
 	env -u GROQ_API_KEY uv run pytest
 
 check: lint typecheck test
+
+gate:
+	uv run python -m rageval.gate
 
 eval:
 	uv run python -m rageval.eval $(if $(SAMPLE),--sample $(SAMPLE))
