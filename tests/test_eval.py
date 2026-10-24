@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from rageval.eval import JudgeError, format_markdown, main, run
+from rageval.generate import REFUSAL_PHRASE
 
 
 def _write_golden(tmp_path: Path) -> Path:
@@ -70,6 +71,33 @@ def test_scores_answerable_rows_and_skips_unanswerable(tmp_path: Path) -> None:
     assert res["judge_cost_usd"] == pytest.approx(0.002)
 
 
+class RefusingGenerator(FakeGenerator):
+    """Refuses (with a citation-free phrase inside a longer reply) on unanswerable Q2."""
+
+    def __call__(self, question: str, k: int) -> dict[str, Any]:
+        out = super().__call__(question, k)
+        if question == "Q2?":
+            out["answer"] = f"Sorry. {REFUSAL_PHRASE}"
+        return out
+
+
+def test_unanswerable_rows_go_to_generator_not_judge_and_refusals_are_counted(
+    tmp_path: Path,
+) -> None:
+    gen, judge = RefusingGenerator(), FakeJudge()
+    res = run(_write_golden(tmp_path), k=3, generator=gen, judge=judge)
+    assert ("Q2?", 3) in gen.calls
+    assert all(s["question"] != "Q2?" for s in judge.samples)
+    assert [s["id"] for s in res["samples"]] == ["f01", "f02"]
+    assert res["metrics"] == {"faithfulness": 0.75, "context_recall": 0.75}
+    assert res["refusal"] == {"count": 1, "total": 1}
+
+
+def test_non_refusing_answer_to_unanswerable_is_not_counted(tmp_path: Path) -> None:
+    res = run(_write_golden(tmp_path), k=3, generator=FakeGenerator(), judge=FakeJudge())
+    assert res["refusal"] == {"count": 0, "total": 1}
+
+
 def test_citation_markers_stripped_for_judge_but_kept_in_results(tmp_path: Path) -> None:
     judge = FakeJudge()
     res = run(_write_golden(tmp_path), k=2, generator=FakeGenerator(), judge=judge)
@@ -114,6 +142,7 @@ def test_format_markdown_snapshot(tmp_path: Path) -> None:
         "| f01 | factual | 1.00 | 0.50 |\n"
         "| f02 | factual | 0.50 | 1.00 |\n"
         "\n"
+        "Refusals on unanswerable: 0 of 1\n"
         "Judge NaN scores (retried): 0\n"
         "Judge tokens: 200 in, 20 out; cost $0.0020\n"
     )

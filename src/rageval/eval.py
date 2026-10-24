@@ -15,7 +15,7 @@ from typing import Any
 
 from dotenv import find_dotenv, load_dotenv
 
-from rageval.generate import generate
+from rageval.generate import REFUSAL_PHRASE, generate
 
 METRICS = ("faithfulness", "context_recall")
 
@@ -90,11 +90,12 @@ def run(
     """Evaluate the answerable Golden set rows and return the results dict.
 
     `sample` is accepted for the stratified sampling of a later ticket; for now all answerable
-    rows are always run. Unanswerable rows are skipped (counted in `skipped_unanswerable`).
+    rows are always scored. Unanswerable rows go through the generator only (never the Judge) and
+    are counted in `skipped_unanswerable` and `refusal`.
 
     Results: k, sample, metrics (mean per metric), samples (id, type, question, answer (raw),
     contexts, reference, one score per metric), nan_count, judge_tokens {input, output},
-    judge_cost_usd, skipped_unanswerable, refusal (None until the refusal ticket fills it).
+    judge_cost_usd, skipped_unanswerable, refusal {count, total}: unanswerable answers containing REFUSAL_PHRASE.
 
     Raises JudgeError if a sample is still NaN after one retry.
     """
@@ -134,6 +135,10 @@ def run(
                 **scores,
             }
         )
+    unanswerable = [r for r in rows if r.get("type") == "unanswerable"]
+    refused = sum(
+        REFUSAL_PHRASE in generator(r["question"], k)["answer"] for r in unanswerable
+    )
     means = {
         m: (sum(s[m] for s in samples) / len(samples) if samples else math.nan) for m in METRICS
     }
@@ -146,7 +151,7 @@ def run(
         "judge_tokens": {"input": tally["input"], "output": tally["output"]},
         "judge_cost_usd": tally["cost"],
         "skipped_unanswerable": len(rows) - len(answerable),
-        "refusal": None,
+        "refusal": {"count": refused, "total": len(unanswerable)},
     }
 
 
@@ -174,6 +179,7 @@ def format_markdown(results: dict[str, Any]) -> str:
     ]
     lines += [
         "",
+        f"Refusals on unanswerable: {results['refusal']['count']} of {results['refusal']['total']}",
         f"Judge NaN scores (retried): {results['nan_count']}",
         f"Judge tokens: {tokens['input']} in, {tokens['output']} out; "
         f"cost ${results['judge_cost_usd']:.4f}",
