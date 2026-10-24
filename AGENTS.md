@@ -32,6 +32,10 @@ When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONN
 
 `RAGEVAL_CACHE_DIR` sets the retrieval cache directory (default `./.eval_cache`, gitignored); tests use a temp dir. `rageval.cache.cached_retriever` caches `retrieve` output only (never generation or Judge), keyed on question, k, collection, chunk size and overlap (`ingest.CHUNK_SIZE`/`CHUNK_OVERLAP`), a SHA-256 of the files in `data/corpus`, and the embedder name (its `name` attribute, else module-qualified function name). Delete the directory to clear it.
 
+## Gate thresholds
+
+`make gate` runs `python -m rageval.gate`: reads `results.json` and the committed `eval_thresholds.json`, prints each failing check with metric, value and threshold, exits 1 on failure. Schema: `{"faithfulness": float, "context_recall": float, "baseline_refusal_count": int}`. Refusal gate requires `refusal.count >= min(4, baseline_refusal_count - 1)`. Missing metrics fail; answer relevancy is not gated. Changing the file needs a `metrics.md` row.
+
 ## Collections
 
 `retrieve` from a collection that was never ingested raises `ValueError` (a visible mistake); an existing collection with no matches returns `[]`. Collection names must be 3+ characters (Chroma rule).
