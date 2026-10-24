@@ -136,9 +136,7 @@ def run(
             }
         )
     unanswerable = [r for r in rows if r.get("type") == "unanswerable"]
-    refused = sum(
-        REFUSAL_PHRASE in generator(r["question"], k)["answer"] for r in unanswerable
-    )
+    refused = sum(REFUSAL_PHRASE in generator(r["question"], k)["answer"] for r in unanswerable)
     means = {
         m: (sum(s[m] for s in samples) / len(samples) if samples else math.nan) for m in METRICS
     }
