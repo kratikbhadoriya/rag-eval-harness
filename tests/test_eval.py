@@ -61,7 +61,7 @@ def test_scores_answerable_rows_and_skips_unanswerable(tmp_path: Path) -> None:
     gen, judge = FakeGenerator(), FakeJudge()
     res = run(_write_golden(tmp_path), k=3, generator=gen, judge=judge)
     assert [s["id"] for s in res["samples"]] == ["f01", "f02"]
-    assert gen.calls == [("Q1?", 3), ("Q3?", 3)]
+    assert gen.calls == [("Q1?", 3), ("Q3?", 3), ("Q2?", 3)]
     assert res["k"] == 3
     assert res["skipped_unanswerable"] == 1
     assert res["metrics"] == {"faithfulness": 0.75, "context_recall": 0.75}
