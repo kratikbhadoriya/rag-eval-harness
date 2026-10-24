@@ -95,7 +95,7 @@ def run(
 
     Results: k, sample, metrics (mean per metric), samples (id, type, question, answer (raw),
     contexts, reference, one score per metric), nan_count, judge_tokens {input, output},
-    judge_cost_usd, skipped_unanswerable, refusal {count, total}: unanswerable answers containing REFUSAL_PHRASE.
+    judge_cost_usd, skipped_unanswerable, refusal {count, total} (answers with REFUSAL_PHRASE).
 
     Raises JudgeError if a sample is still NaN after one retry.
     """
