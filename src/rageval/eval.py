@@ -15,6 +15,7 @@ from typing import Any
 
 from dotenv import find_dotenv, load_dotenv
 
+from rageval.cache import cached_retriever
 from rageval.generate import generate
 
 METRICS = ("faithfulness", "context_recall")
@@ -99,9 +100,10 @@ def run(
     Raises JudgeError if a sample is still NaN after one retry.
     """
     if generator is None:
+        retriever = cached_retriever(collection)
 
         def generator(question: str, k: int) -> dict[str, Any]:
-            return generate(question, k, collection=collection)
+            return generate(question, k, collection=collection, retriever=retriever)
 
     if judge is None:
         judge = ragas_judge()
