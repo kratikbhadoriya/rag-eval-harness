@@ -13,3 +13,6 @@ wheels/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+# eval output (results.md is committed as the baseline)
+results.json
