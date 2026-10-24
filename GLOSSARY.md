@@ -35,3 +35,27 @@ _Avoid_: Snapshot, fixture
 **Unanswerable question**:
 A golden-set question the Corpus cannot answer, where the correct response is to say so.
 _Avoid_: Negative, trick question, out-of-scope
+
+**Judge**:
+The LLM, separate from the one that writes answers, that scores each answer for faithfulness and context recall.
+_Avoid_: Grader, evaluator, scorer
+
+**Faithfulness**:
+How much of an answer's content is supported by the contexts it was given, from 0 to 1.
+_Avoid_: Accuracy, correctness, groundedness
+
+**Context recall**:
+How much of the reference answer is covered by the contexts that were retrieved, from 0 to 1.
+_Avoid_: Retrieval accuracy, hit rate
+
+**Refusal**:
+An answer that says the Corpus does not contain what was asked, using the fixed refusal phrase from the prompt.
+_Avoid_: Abstention, no-answer
+
+**Quality gate**:
+The CI check that fails a change when faithfulness or context recall on answerable questions falls below its threshold.
+_Avoid_: Test, benchmark, check
+
+**Refusal gate**:
+The CI check, run alongside the quality gate, that fails a change when too few Unanswerable questions get a Refusal.
+_Avoid_: Safety gate
