@@ -45,13 +45,18 @@ def generate(
     embed: Embedder | None = None,
     completion: Completion | None = None,
     model: str = DEFAULT_MODEL,
+    retriever: Callable[[str, int], list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Retrieve the top-k chunks and answer from them at temperature 0.
 
     Returns {"answer": str, "contexts": list of retrieve() dicts, best first}. Raises
-    ValueError if the collection was never ingested.
+    ValueError if the collection was never ingested. `retriever(question, k)` replaces the
+    direct `retrieve` call (e.g. the on-disk cache); the completion is never cached.
     """
-    contexts = retrieve(question, k, collection=collection, embed=embed)
+    if retriever is not None:
+        contexts = retriever(question, k)
+    else:
+        contexts = retrieve(question, k, collection=collection, embed=embed)
     call = completion or _default_completion
     response = call(
         model=model,

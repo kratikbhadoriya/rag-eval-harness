@@ -30,6 +30,8 @@ When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONN
 
 `RAGEVAL_CHROMA_DIR` sets the Chroma persistence directory (default `./.chroma`); tests point it at a temp dir via the `chroma_dir` fixture. `GROQ_API_KEY` is never needed by tests and is deleted for them by an autouse fixture.
 
+`RAGEVAL_CACHE_DIR` sets the retrieval cache directory (default `./.eval_cache`, gitignored); tests use a temp dir. `rageval.cache.cached_retriever` caches `retrieve` output only (never generation or Judge), keyed on question, k, collection, chunk size and overlap (`ingest.CHUNK_SIZE`/`CHUNK_OVERLAP`), a SHA-256 of the files in `data/corpus`, and the embedder name (its `name` attribute, else module-qualified function name). Delete the directory to clear it.
+
 ## Collections
 
 `retrieve` from a collection that was never ingested raises `ValueError` (a visible mistake); an existing collection with no matches returns `[]`. Collection names must be 3+ characters (Chroma rule).
