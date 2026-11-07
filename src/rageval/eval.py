@@ -144,7 +144,9 @@ def run(
     Results: k, sample, rows_total (Golden set size), rows_scored, metrics (mean per metric),
     samples (id, type, question, answer (raw),
     contexts, reference, one score per metric), nan_count, judge_tokens {input, output},
-    judge_cost_usd, skipped_unanswerable, refusal {count, total} (answers with REFUSAL_PHRASE).
+    judge_cost_usd, skipped_unanswerable, refusal {count, total} (answers with REFUSAL_PHRASE),
+    answerable_refused {count, total} (answerable rows the generator refused: usually a retrieval
+    miss, scored 0 Faithfulness).
 
     Raises JudgeError if a sample is still NaN after one retry.
     """
@@ -183,6 +185,7 @@ def run(
                 "answer": gen["answer"],
                 "contexts": contexts,
                 "reference": row["reference_answer"],
+                "refused": REFUSAL_PHRASE in gen["answer"],
                 **scores,
             }
         )
@@ -203,6 +206,10 @@ def run(
         "judge_cost_usd": tally["cost"],
         "skipped_unanswerable": len(rows) - len(answerable),
         "refusal": {"count": refused, "total": len(unanswerable)},
+        "answerable_refused": {
+            "count": sum(s["refused"] for s in samples),
+            "total": len(samples),
+        },
     }
 
 
@@ -221,15 +228,18 @@ def format_markdown(results: dict[str, Any]) -> str:
         f"| Faithfulness | {means['faithfulness']:.3f} |",
         f"| Context recall | {means['context_recall']:.3f} |",
         "",
-        "| Id | Type | Faithfulness | Context recall |",
-        "| --- | --- | --- | --- |",
+        "| Id | Type | Faithfulness | Context recall | Refused |",
+        "| --- | --- | --- | --- | --- |",
     ]
     lines += [
-        f"| {s['id']} | {s['type']} | {s['faithfulness']:.2f} | {s['context_recall']:.2f} |"
+        f"| {s['id']} | {s['type']} | {s['faithfulness']:.2f} | {s['context_recall']:.2f} "
+        f"| {'yes' if s['refused'] else ''} |"
         for s in results["samples"]
     ]
     lines += [
         "",
+        f"Refusals on answerable: {results['answerable_refused']['count']} of "
+        f"{results['answerable_refused']['total']}",
         f"Refusals on unanswerable: {results['refusal']['count']} of {results['refusal']['total']}",
         f"Judge NaN scores (retried): {results['nan_count']}",
         f"Judge tokens: {tokens['input']} in, {tokens['output']} out; "
