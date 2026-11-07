@@ -51,4 +51,4 @@ def multi_pdf() -> Path:
 @pytest.fixture(autouse=True)
 def no_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests never see an API key, whatever the developer's environment holds."""
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)

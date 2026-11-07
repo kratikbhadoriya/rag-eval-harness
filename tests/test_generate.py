@@ -7,7 +7,7 @@ import pytest
 
 from rageval import generate, ingest
 from rageval.embed import Embedder
-from rageval.generate import REFUSAL_PHRASE
+from rageval.generate import DEFAULT_MODEL, REFUSAL_PHRASE
 
 
 class FakeCompletion:
@@ -72,14 +72,14 @@ def test_prompt_comes_from_file_and_carries_refusal_phrase(
     assert REFUSAL_PHRASE in prompt_file.read_text()
 
 
-def test_calls_completion_at_temperature_zero_with_a_groq_model(
+def test_calls_completion_at_temperature_zero_with_an_openai_model(
     multi_pdf: Path, chroma_dir: Path, fake_embed: Embedder
 ) -> None:
     ingest([multi_pdf], embed=fake_embed)
     fake = FakeCompletion()
     generate("Rivers", k=1, embed=fake_embed, completion=fake)
     assert fake.calls[0]["temperature"] == 0
-    assert fake.calls[0]["model"].startswith("groq/")
+    assert fake.calls[0]["model"] == DEFAULT_MODEL
 
 
 def test_unknown_collection_raises_value_error(chroma_dir: Path, fake_embed: Embedder) -> None:

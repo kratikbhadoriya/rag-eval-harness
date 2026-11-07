@@ -1,7 +1,6 @@
 """Answer a question from the top-k retrieved chunks, numbered in a prompt read from a file."""
 
 import re
-import time
 from collections.abc import Callable
 from importlib import resources
 from typing import Any
@@ -18,29 +17,18 @@ REFUSAL_PHRASE = "I cannot answer this from the provided documents."
 Refusal detection (later tickets) matches on this constant; `prompts/answer.txt` must contain it.
 """
 
-DEFAULT_MODEL = "groq/openai/gpt-oss-120b"
+DEFAULT_MODEL = "gpt-4.1-mini"
 
 Completion = Callable[..., Any]
 """Called like `litellm.completion(model=..., messages=..., temperature=...)`; inject a fake."""
-
-
-RATE_LIMIT_RETRIES = 8
-RATE_LIMIT_WAIT_SECONDS = 20  # Groq free tier: 8000 tokens per minute
 
 
 def _default_completion(**kwargs: Any) -> Any:
     """litellm.completion, imported and keyed on first use so imports need no key."""
     load_dotenv(find_dotenv(usecwd=True))
     import litellm
-    from litellm.exceptions import RateLimitError
 
-    for attempt in range(RATE_LIMIT_RETRIES):
-        try:
-            return litellm.completion(**kwargs)
-        except RateLimitError:
-            if attempt == RATE_LIMIT_RETRIES - 1:
-                raise
-            time.sleep(RATE_LIMIT_WAIT_SECONDS)
+    return litellm.completion(**kwargs)
 
 
 def build_prompt(question: str, contexts: list[dict[str, Any]]) -> str:

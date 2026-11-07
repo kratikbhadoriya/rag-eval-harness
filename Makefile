@@ -15,7 +15,7 @@ typecheck:
 	uv run mypy
 
 test:
-	env -u GROQ_API_KEY uv run pytest
+	env -u OPENAI_API_KEY uv run pytest
 
 check: lint typecheck test
 

@@ -1,13 +1,13 @@
 ## Stack
 
-Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters, litellm (Groq, generation later), ruff, strict mypy, pytest, pre-commit.
+Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters, litellm (OpenAI), ruff, strict mypy, pytest, pre-commit.
 
 ## Layout
 
 - `src/rageval/ingest.py`, `retrieve.py`: plain functions over plain dicts
 - `src/rageval/embed.py`: `Embedder` type and lazy `default_embed`
 - `src/rageval/store.py`: shared Chroma persistent client
-- `src/rageval/generate.py`: retrieve top-k, answer via litellm (Groq); prompt in `src/rageval/prompts/answer.txt`
+- `src/rageval/generate.py`: retrieve top-k, answer via litellm (OpenAI gpt-4.1-mini, a different model from the gpt-4o-mini Judge); prompt in `src/rageval/prompts/answer.txt`
 - `src/rageval/eval.py`: runs the Golden set through generate + Judge, writes `results.json` / `results.md`
 - `src/rageval/cache.py`: on-disk retrieval cache (`RAGEVAL_CACHE_DIR`), never caches generation or Judge calls
 - `src/rageval/gate.py`: quality and Refusal gate over `results.json` and `eval_thresholds.json`
@@ -17,7 +17,7 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 ## Commands
 
 - `make install`, `make lint`, `make fmt`, `make typecheck`, `make test`, `make check`
-- `make ingest` (ingest `data/corpus`), `make eval [SAMPLE=n]` (needs `OPENAI_API_KEY` and `GROQ_API_KEY`), `make gate` (checks `results.json` against `eval_thresholds.json`)
+- `make ingest` (ingest `data/corpus`), `make eval [SAMPLE=n]` (needs `OPENAI_API_KEY`), `make gate` (checks `results.json` against `eval_thresholds.json`)
 
 ## Rules
 
@@ -32,7 +32,7 @@ When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONN
 
 ## Config
 
-`RAGEVAL_CHROMA_DIR` sets the Chroma persistence directory (default `./.chroma`); tests point it at a temp dir via the `chroma_dir` fixture. `GROQ_API_KEY` is never needed by tests and is deleted for them by an autouse fixture.
+`RAGEVAL_CHROMA_DIR` sets the Chroma persistence directory (default `./.chroma`); tests point it at a temp dir via the `chroma_dir` fixture. `OPENAI_API_KEY` is never needed by tests and is deleted for them by an autouse fixture.
 
 `RAGEVAL_CACHE_DIR` sets the retrieval cache directory (default `./.eval_cache`, gitignored); tests use a temp dir. `rageval.cache.cached_retriever` caches `retrieve` output only (never generation or Judge), keyed on question, k, collection, chunk size and overlap (`ingest.CHUNK_SIZE`/`CHUNK_OVERLAP`), a SHA-256 of the files in `data/corpus`, and the embedder name (its `name` attribute, else module-qualified function name). Delete the directory to clear it.
 
