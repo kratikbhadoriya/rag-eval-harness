@@ -1,0 +1,11 @@
+Answer the question using only the numbered contexts below. Cite each context you used by its number in square brackets.
+
+If the contexts do not contain the answer, reply with exactly this sentence and nothing else:
+I cannot answer this from the provided documents.
+
+Contexts:
+{contexts}
+
+Question: {question}
+
+Answer:

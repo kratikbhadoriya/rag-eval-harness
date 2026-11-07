@@ -17,3 +17,7 @@ A small harness that ingests PDFs, retrieves passages for a query, and measures 
 ## Frozen corpus
 
 The 8 PDFs in `data/corpus/` are committed and checksummed in `data/corpus/SHA256SUMS`. `tests/test_golden.py` fails if any PDF changes, is added or is removed. Never edit the corpus: if it moves, no numbers compare.
+
+## RAGAS version
+
+The Judge metrics (Faithfulness, Context recall) use **RAGAS 0.4.3**, pinned exactly in `pyproject.toml` because metric classes have been renamed across releases. `langchain-community` is held below 0.4 because RAGAS 0.4.3 imports a module that 0.4 removed.

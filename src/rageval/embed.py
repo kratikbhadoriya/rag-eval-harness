@@ -20,3 +20,7 @@ def default_embed(texts: list[str]) -> list[list[float]]:
 
         _model = onnx_mini_lm_l6_v2.ONNXMiniLM_L6_V2()
     return [[float(x) for x in vec] for vec in _model(texts)]
+
+
+default_embed.name = "chroma-onnx-all-MiniLM-L6-v2"  # type: ignore[attr-defined]
+# ^ identity of the model behind `default_embed`; part of the retrieval cache key.
