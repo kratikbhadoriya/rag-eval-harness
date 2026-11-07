@@ -337,10 +337,8 @@ def main(
     args = parser.parse_args(argv)
 
     load_dotenv(find_dotenv(usecwd=True))
-    needed = (("OPENAI_API_KEY",) if judge is None else ()) + (
-        ("GROQ_API_KEY",) if generator is None else ()
-    )
-    missing = [v for v in needed if not os.environ.get(v)]
+    needs_key = judge is None or generator is None
+    missing = [v for v in ("OPENAI_API_KEY",) if needs_key and not os.environ.get(v)]
     if missing:
         print(
             f"error: missing {', '.join(missing)} (set in .env or the environment)", file=sys.stderr
