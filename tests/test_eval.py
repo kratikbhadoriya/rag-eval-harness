@@ -122,6 +122,39 @@ def test_persistent_nan_fails_run_naming_sample(tmp_path: Path) -> None:
     assert sum(1 for s in judge.samples if s["question"] == "Q3?") == 2
 
 
+class RefusingOnAnswerableGenerator(FakeGenerator):
+    """Refuses the answerable question Q1, as when retrieval misses the evidence."""
+
+    def __call__(self, question: str, k: int) -> dict[str, Any]:
+        out = super().__call__(question, k)
+        if question == "Q1?":
+            out["answer"] = REFUSAL_PHRASE
+        return out
+
+
+def test_refusals_on_answerable_rows_are_flagged_and_counted(tmp_path: Path) -> None:
+    res = run(
+        _write_golden(tmp_path), k=3, generator=RefusingOnAnswerableGenerator(), judge=FakeJudge()
+    )
+    assert [s["refused"] for s in res["samples"]] == [True, False]
+    assert res["answerable_refused"] == {"count": 1, "total": 2}
+
+
+def test_no_refusals_on_answerable_rows(tmp_path: Path) -> None:
+    res = run(_write_golden(tmp_path), k=3, generator=FakeGenerator(), judge=FakeJudge())
+    assert res["answerable_refused"] == {"count": 0, "total": 2}
+
+
+def test_format_markdown_marks_refused_answerable_rows(tmp_path: Path) -> None:
+    res = run(
+        _write_golden(tmp_path), k=3, generator=RefusingOnAnswerableGenerator(), judge=FakeJudge()
+    )
+    text = format_markdown(res)
+    assert "| f01 | factual | 1.00 | 0.50 | yes |" in text
+    assert "| f02 | factual | 0.50 | 1.00 |  |" in text
+    assert "Refusals on answerable: 1 of 2" in text
+
+
 def _results(tmp_path: Path) -> dict[str, Any]:
     return run(_write_golden(tmp_path), k=3, generator=FakeGenerator(), judge=FakeJudge())
 
@@ -137,11 +170,12 @@ def test_format_markdown_snapshot(tmp_path: Path) -> None:
         "| Faithfulness | 0.750 |\n"
         "| Context recall | 0.750 |\n"
         "\n"
-        "| Id | Type | Faithfulness | Context recall |\n"
-        "| --- | --- | --- | --- |\n"
-        "| f01 | factual | 1.00 | 0.50 |\n"
-        "| f02 | factual | 0.50 | 1.00 |\n"
+        "| Id | Type | Faithfulness | Context recall | Refused |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        "| f01 | factual | 1.00 | 0.50 |  |\n"
+        "| f02 | factual | 0.50 | 1.00 |  |\n"
         "\n"
+        "Refusals on answerable: 0 of 2\n"
         "Refusals on unanswerable: 0 of 1\n"
         "Judge NaN scores (retried): 0\n"
         "Judge tokens: 200 in, 20 out; cost $0.0020\n"
