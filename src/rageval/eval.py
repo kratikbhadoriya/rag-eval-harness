@@ -330,7 +330,7 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(prog="rageval.eval", description=__doc__)
     parser.add_argument("--golden", type=Path, default=Path("golden/golden.jsonl"))
-    parser.add_argument("--k", type=int, default=5)
+    parser.add_argument("--k", type=int, default=1)
     parser.add_argument("--sample", type=int, default=None, help="score n rows (stratified)")
     parser.add_argument("--collection", default="default")
     parser.add_argument("--out-dir", type=Path, default=Path("."))
