@@ -29,4 +29,12 @@ Every pull request runs `make eval SAMPLE=30` and `make gate` (`.github/workflow
 | Demo | PR | Result |
 | --- | --- | --- |
 | Red: default `k` set to 1 | [#31](https://github.com/kratikbhadoriya/rag-eval-harness/pull/31) (closed) | Fails: faithfulness 0.451 < 0.743, context recall 0.260 < 0.617 |
-| Green: prompt-file tweak only | [#32](https://github.com/kratikbhadoriya/rag-eval-harness/pull/32) | Passes the Quality gate and the Refusal gate |
+| Green: prompt-file tweak only | [#32](https://github.com/kratikbhadoriya/rag-eval-harness/pull/32) (closed, not merged) | Passes the Quality gate and the Refusal gate |
+
+Red PR: the Gate step fails and says which metric and threshold failed.
+
+![Red PR: the Eval check fails the Quality gate](images/red_pr_failing_eval_screenshot.png)
+
+Green PR: the same check passes both gates.
+
+![Green PR: the Eval check passes](images/green_pr_passing_eval_screenshot.png)
