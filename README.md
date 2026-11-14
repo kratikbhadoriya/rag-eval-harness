@@ -21,3 +21,12 @@ The 8 PDFs in `data/corpus/` are committed and checksummed in `data/corpus/SHA25
 ## RAGAS version
 
 The Judge metrics (Faithfulness, Context recall) use **RAGAS 0.4.3**, pinned exactly in `pyproject.toml` because metric classes have been renamed across releases. `langchain-community` is held below 0.4 because RAGAS 0.4.3 imports a module that 0.4 removed.
+
+## CI quality gate
+
+Every pull request runs `make eval SAMPLE=30` and `make gate` (`.github/workflows/eval.yml`). Thresholds live in `eval_thresholds.json` (baseline minus 0.05); the current baseline is in `results.md`.
+
+| Demo | PR | Result |
+| --- | --- | --- |
+| Red: default `k` set to 1 | [#31](https://github.com/kratikbhadoriya/rag-eval-harness/pull/31) (closed) | Fails: faithfulness 0.451 < 0.743, context recall 0.260 < 0.617 |
+| Green: prompt-file tweak only | [#32](https://github.com/kratikbhadoriya/rag-eval-harness/pull/32) | Passes the Quality gate and the Refusal gate |
