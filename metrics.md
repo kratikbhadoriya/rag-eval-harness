@@ -11,6 +11,9 @@ Every change that affects retrieval or answer quality gets a row.
 | 2026-11-14 | retrieval k 5 -> 10 (#28), SAMPLE=30 | faithfulness / context recall / answerable refused | 0.793 / 0.667 / 3 of 25 | 0.910 / 0.853 / 1 of 25 | experiment, adopted as default |
 | 2026-11-14 | retrieval k 5 -> 15 (#28), SAMPLE=30 | faithfulness / context recall / answerable refused | 0.793 / 0.667 / 3 of 25 | 0.957 / 0.873 / 1 of 25 | experiment only; refusals no better than k=10 for 50% more context, not adopted |
 | 2026-11-14 | default k=10 (#28), official run, SAMPLE=30 | faithfulness / context recall / refusals | 0.793 / 0.667 / 5 of 5 | 0.919 / 0.853 / 5 of 5 | thresholds reset to baseline - 0.05 (0.869 / 0.803), refusal floor unchanged; answerable refused 3 -> 1 of 25; chunk size and embedder not changed; Judge cost $0.0583 |
+| 2026-11-14 | chunks 2000/400 -> 1000/200, k=10 (#28), SAMPLE=30 | faithfulness / context recall / answerable refused | 0.919 / 0.853 / 1 of 25 | 0.945 / 0.713 / 0 of 25 | experiment only, not adopted: context recall regressed 0.14 |
+| 2026-11-14 | chunks 2000/400 -> 500/100, k=10 (#28), SAMPLE=30 | faithfulness / context recall / answerable refused | 0.919 / 0.853 / 1 of 25 | 0.852 / 0.650 / 1 of 25 | experiment only, not adopted: both metrics regressed |
+| 2026-11-14 | embedder all-MiniLM-L6-v2 -> OpenAI text-embedding-3-small, k=10 (#28), SAMPLE=30 | faithfulness / context recall / answerable refused | 0.919 / 0.853 / 1 of 25 | 0.939 / 0.853 / 0 of 25 | experiment only, not adopted: gain is within run-to-run Judge noise (k=10 run twice gave 0.910 and 0.919) and it would make ingest and retrieval need an API key and network |
 
 
 ## Starting configuration
