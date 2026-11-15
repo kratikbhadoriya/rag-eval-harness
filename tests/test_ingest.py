@@ -11,7 +11,7 @@ from rageval.embed import Embedder
 
 
 def _all_chunks(embed: Embedder, collection: str = "default") -> list[dict[str, Any]]:
-    return retrieve("the", k=1000, collection=collection, embed=embed)
+    return retrieve("the", k=1000, collection=collection, embed=embed, retriever="dense")
 
 
 def test_single_page_returns_count_and_records_metadata(

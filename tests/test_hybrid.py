@@ -34,7 +34,7 @@ def test_hybrid_scores_are_summed_reciprocal_ranks_of_both_rankings(
     tmp_path: Path, chroma_dir: Path, fake_embed: Embedder
 ) -> None:
     ingest([make_pdf(tmp_path / "rare.pdf", RARE_PAGES)], embed=fake_embed)
-    dense = _ranks(retrieve(QUERY, k=50, embed=fake_embed))
+    dense = _ranks(retrieve(QUERY, k=50, embed=fake_embed, retriever="dense"))
     bm25 = _ranks(retrieve(QUERY, k=50, embed=fake_embed, retriever="bm25"))
     hybrid = retrieve(QUERY, k=10, embed=fake_embed, retriever="hybrid")
     assert hybrid

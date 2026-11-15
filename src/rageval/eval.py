@@ -18,7 +18,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from rageval.cache import cached_retriever
 from rageval.generate import REFUSAL_PHRASE, generate
-from rageval.retrieve import RETRIEVERS
+from rageval.retrieve import DEFAULT_RETRIEVER, RETRIEVERS
 
 METRICS = ("faithfulness", "context_recall")
 
@@ -136,7 +136,7 @@ def run(
     generator: Generator | None = None,
     judge: Judge | None = None,
     collection: str = "default",
-    retriever: str = "dense",
+    retriever: str = DEFAULT_RETRIEVER,
 ) -> dict[str, Any]:
     """Evaluate the answerable Golden set rows and return the results dict.
 
@@ -339,7 +339,7 @@ def main(
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--sample", type=int, default=None, help="score n rows (stratified)")
     parser.add_argument("--collection", default="default")
-    parser.add_argument("--retriever", choices=RETRIEVERS, default="dense")
+    parser.add_argument("--retriever", choices=RETRIEVERS, default=DEFAULT_RETRIEVER)
     parser.add_argument("--out-dir", type=Path, default=Path("."))
     args = parser.parse_args(argv)
 

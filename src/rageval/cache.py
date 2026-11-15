@@ -13,7 +13,7 @@ from typing import Any
 
 from rageval.embed import Embedder, default_embed
 from rageval.ingest import CHUNK_OVERLAP, CHUNK_SIZE
-from rageval.retrieve import retrieve
+from rageval.retrieve import DEFAULT_RETRIEVER, retrieve
 
 Retriever = Callable[[str, int], list[dict[str, Any]]]
 """(question, k) -> retrieve() result dicts."""
@@ -50,7 +50,7 @@ def cached_retriever(
     corpus_dir: Path = DEFAULT_CORPUS_DIR,
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
-    retriever: str = "dense",
+    retriever: str = DEFAULT_RETRIEVER,
 ) -> Retriever:
     """Return a retriever that reads/writes the cache around `retrieve`.
 

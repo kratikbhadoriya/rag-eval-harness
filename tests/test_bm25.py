@@ -28,11 +28,20 @@ RARE_PAGES = [
 QUERY = "xylophone alpha"
 
 
+def test_default_retrieve_is_bm25_and_never_calls_the_embedder(
+    tmp_path: Path, chroma_dir: Path, fake_embed: Embedder
+) -> None:
+    ingest([make_pdf(tmp_path / "rare.pdf", RARE_PAGES)], embed=fake_embed)
+    default = retrieve(QUERY, k=4, embed=_never_called)
+    assert default == retrieve(QUERY, k=4, embed=fake_embed, retriever="bm25")
+    assert default[0]["page"] == 1
+
+
 def test_bm25_ranks_rare_word_chunk_first_where_dense_ranks_another_higher(
     tmp_path: Path, chroma_dir: Path, fake_embed: Embedder
 ) -> None:
     ingest([make_pdf(tmp_path / "rare.pdf", RARE_PAGES)], embed=fake_embed)
-    dense = retrieve(QUERY, k=4, embed=fake_embed)
+    dense = retrieve(QUERY, k=4, embed=fake_embed, retriever="dense")
     assert dense[0]["page"] == 2
     bm25 = retrieve(QUERY, k=4, embed=fake_embed, retriever="bm25")
     assert bm25[0]["page"] == 1
@@ -48,7 +57,7 @@ def _text_by_id(results: list[dict[str, Any]]) -> dict[str, str]:
 
 
 def _both_index_same_text(embed: Embedder) -> None:
-    dense = retrieve("anything", k=1000, embed=embed)
+    dense = retrieve("anything", k=1000, embed=embed, retriever="dense")
     all_words = " ".join(r["text"] for r in dense)
     bm25 = retrieve(all_words, k=1000, embed=embed, retriever="bm25")
     assert _text_by_id(bm25) == _text_by_id(dense)
@@ -75,7 +84,7 @@ def test_bm25_and_vector_store_index_identical_text_across_reingest_and_second_f
     ingest([second], embed=fake_embed)
     _both_index_same_text(fake_embed)
     assert len(retrieve("comet", k=100, embed=fake_embed, retriever="bm25")) == 1
-    assert len(retrieve("anything", k=100, embed=fake_embed)) == 6
+    assert len(retrieve("anything", k=100, embed=fake_embed, retriever="dense")) == 6
 
 
 def test_collections_are_isolated(tmp_path: Path, chroma_dir: Path, fake_embed: Embedder) -> None:

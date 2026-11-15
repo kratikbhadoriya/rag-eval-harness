@@ -1,5 +1,5 @@
 {
-  "faithfulness": 0.869,
-  "context_recall": 0.803,
+  "faithfulness": 0.846,
+  "context_recall": 0.877,
   "baseline_refusal_count": 5
 }

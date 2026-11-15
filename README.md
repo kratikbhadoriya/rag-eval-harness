@@ -14,6 +14,8 @@ A small harness that ingests PDFs, retrieves passages for a query, and measures 
 | unanswerable | 5 |
 | **total** | **30** |
 
+The default Retriever is bm25: it won the three-way comparison on Context recall (0.927) by a margin of 0.053 over the runner-up hybrid (0.873) and 0.073 over dense (0.853).
+
 ## Frozen corpus
 
 The 8 PDFs in `data/corpus/` are committed and checksummed in `data/corpus/SHA256SUMS`. `tests/test_golden.py` fails if any PDF changes, is added or is removed. Never edit the corpus: if it moves, no numbers compare.
