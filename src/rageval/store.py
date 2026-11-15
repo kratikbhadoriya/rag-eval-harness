@@ -9,13 +9,18 @@ import chromadb
 from chromadb.api import ClientAPI
 
 
+def chroma_dir() -> Path:
+    """RAGEVAL_CHROMA_DIR, default ./.chroma; single source for the client and Chunk list."""
+    return Path(os.environ.get("RAGEVAL_CHROMA_DIR", "./.chroma"))
+
+
 def chroma_client() -> ClientAPI:
     """Open the persistent Chroma store at RAGEVAL_CHROMA_DIR (default ./.chroma)."""
-    return chromadb.PersistentClient(path=os.environ.get("RAGEVAL_CHROMA_DIR", "./.chroma"))
+    return chromadb.PersistentClient(path=str(chroma_dir()))
 
 
 def _chunk_list_path(collection: str) -> Path:
-    base = Path(os.environ.get("RAGEVAL_CHROMA_DIR", "./.chroma"))
+    base = chroma_dir()
     return base / "rageval_chunks" / f"{collection}.jsonl"
 
 

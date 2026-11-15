@@ -1,7 +1,7 @@
 """Retrieve the most similar chunks for a query."""
 
 import re
-from typing import Any
+from typing import Any, Literal, get_args
 
 from chromadb.errors import NotFoundError
 from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
@@ -9,8 +9,9 @@ from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 from rageval.embed import Embedder, default_embed
 from rageval.store import chroma_client, chunk_list_stamp, load_chunks
 
-RETRIEVERS: tuple[str, ...] = ("dense", "bm25", "hybrid")
-DEFAULT_RETRIEVER = "bm25"  # won #38 on Context recall; see metrics.md
+RetrieverName = Literal["dense", "bm25", "hybrid"]
+RETRIEVERS: tuple[str, ...] = get_args(RetrieverName)
+DEFAULT_RETRIEVER: RetrieverName = "bm25"  # won #38 on Context recall; see metrics.md
 
 # Reciprocal rank fusion constant; 60 is the standard value from the original RRF paper.
 RRF_K = 60
@@ -99,7 +100,7 @@ def _retrieve_hybrid(
     for ranking in rankings:
         for rank, result in enumerate(ranking, start=1):
             cid = result["chunk_id"]
-            by_id[cid] = result
+            by_id.setdefault(cid, result)
             scores[cid] = scores.get(cid, 0.0) + 1.0 / (RRF_K + rank)
     ordered = sorted(scores, key=lambda cid: scores[cid], reverse=True)[:k]
     return [{**by_id[cid], "score": scores[cid]} for cid in ordered]
@@ -110,7 +111,7 @@ def retrieve(
     k: int,
     collection: str = "default",
     embed: Embedder | None = None,
-    retriever: str = DEFAULT_RETRIEVER,
+    retriever: RetrieverName = DEFAULT_RETRIEVER,
 ) -> list[dict[str, Any]]:
     """Return up to k chunks for the query, best first.
 

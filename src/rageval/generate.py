@@ -7,7 +7,7 @@ from typing import Any
 
 from dotenv import find_dotenv, load_dotenv
 
-from rageval.cache import Retriever
+from rageval.cache import RetrieveFn
 from rageval.embed import Embedder
 from rageval.retrieve import retrieve
 
@@ -46,7 +46,7 @@ def generate(
     embed: Embedder | None = None,
     completion: Completion | None = None,
     model: str = DEFAULT_MODEL,
-    retriever: Retriever | None = None,
+    retriever: RetrieveFn | None = None,
 ) -> dict[str, Any]:
     """Retrieve the top-k chunks and answer from them at temperature 0.
 

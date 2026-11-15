@@ -18,7 +18,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from rageval.cache import cached_retriever
 from rageval.generate import REFUSAL_PHRASE, generate
-from rageval.retrieve import DEFAULT_RETRIEVER, RETRIEVERS
+from rageval.retrieve import DEFAULT_RETRIEVER, RETRIEVERS, RetrieverName
 
 METRICS = ("faithfulness", "context_recall")
 
@@ -136,7 +136,7 @@ def run(
     generator: Generator | None = None,
     judge: Judge | None = None,
     collection: str = "default",
-    retriever: str = DEFAULT_RETRIEVER,
+    retriever: RetrieverName = DEFAULT_RETRIEVER,
 ) -> dict[str, Any]:
     """Evaluate the answerable Golden set rows and return the results dict.
 
