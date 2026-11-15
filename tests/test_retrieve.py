@@ -33,11 +33,11 @@ def test_score_is_one_minus_cosine_distance(
     single_pdf: Path, chroma_dir: Path, fake_embed: Embedder
 ) -> None:
     ingest([single_pdf], embed=fake_embed)
-    text = retrieve("anything", k=1, embed=fake_embed)[0]["text"]
+    text = retrieve("anything", k=1, embed=fake_embed, retriever="dense")[0]["text"]
     # Querying with the chunk's own text: cosine distance 0, so score 1.
-    assert abs(retrieve(text, k=1, embed=fake_embed)[0]["score"] - 1.0) < 1e-6
+    assert abs(retrieve(text, k=1, embed=fake_embed, retriever="dense")[0]["score"] - 1.0) < 1e-6
     # A query sharing no words with the chunk: distance near 1, score near 0.
-    other = retrieve("zzqx", k=1, embed=fake_embed)[0]["score"]
+    other = retrieve("zzqx", k=1, embed=fake_embed, retriever="dense")[0]["score"]
     assert -0.01 < other < 0.5
 
 

@@ -39,6 +39,7 @@ def env(
 
 
 def _hits(corpus: Path, emb: CountingEmbedder, k: int = 2, **kw: Any) -> list[dict[str, Any]]:
+    kw.setdefault("retriever", "dense")  # these tests count embedder calls
     retrieve = cached_retriever("docs", embed=emb, corpus_dir=corpus, **kw)
     return retrieve("what is this?", k)
 
@@ -87,7 +88,7 @@ def test_changed_embedder_name_misses(env: tuple[Path, CountingEmbedder]) -> Non
 
 def test_generation_is_never_cached(env: tuple[Path, CountingEmbedder]) -> None:
     corpus, emb = env
-    retrieve = cached_retriever("docs", embed=emb, corpus_dir=corpus)
+    retrieve = cached_retriever("docs", embed=emb, corpus_dir=corpus, retriever="dense")
     calls: list[Any] = []
 
     def completion(**kwargs: Any) -> Any:

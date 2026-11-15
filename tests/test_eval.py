@@ -347,8 +347,12 @@ def test_cli_rejects_invalid_retriever_listing_choices(
     assert all(name in err for name in ("dense", "bm25", "hybrid"))
 
 
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [(["--retriever", "hybrid"], "hybrid"), (["--retriever", "dense"], "dense"), ([], "bm25")],
+)
 def test_cli_retriever_reaches_retrieve_and_is_recorded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flags: list[str], expected: str
 ) -> None:
     seen: list[str] = []
 
@@ -367,17 +371,17 @@ def test_cli_retriever_reaches_retrieve_and_is_recorded(
     monkeypatch.setattr("rageval.eval.generate", fake_generate)
     out = tmp_path / "out"
     code = main(
-        ["--golden", str(_write_golden(tmp_path)), "--retriever", "bm25", "--out-dir", str(out)],
+        ["--golden", str(_write_golden(tmp_path)), *flags, "--out-dir", str(out)],
         judge=FakeJudge(),
     )
     assert code == 0
-    assert seen and set(seen) == {"bm25"}
-    assert json.loads((out / "results.json").read_text())["retriever"] == "bm25"
+    assert seen and set(seen) == {expected}
+    assert json.loads((out / "results.json").read_text())["retriever"] == expected
 
 
-def test_results_default_retriever_is_dense(tmp_path: Path) -> None:
+def test_results_default_retriever_is_bm25(tmp_path: Path) -> None:
     results = run(_write_golden(tmp_path), 2, generator=FakeGenerator(), judge=FakeJudge())
-    assert results["retriever"] == "dense"
+    assert results["retriever"] == "bm25"
 
 
 def test_golden_set_version_is_8_hex_and_tracks_file_contents(tmp_path: Path) -> None:

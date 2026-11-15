@@ -10,6 +10,7 @@ from rageval.embed import Embedder, default_embed
 from rageval.store import chroma_client, chunk_list_stamp, load_chunks
 
 RETRIEVERS: tuple[str, ...] = ("dense", "bm25", "hybrid")
+DEFAULT_RETRIEVER = "bm25"  # won #38 on Context recall; see metrics.md
 
 # Reciprocal rank fusion constant; 60 is the standard value from the original RRF paper.
 RRF_K = 60
@@ -109,11 +110,11 @@ def retrieve(
     k: int,
     collection: str = "default",
     embed: Embedder | None = None,
-    retriever: str = "dense",
+    retriever: str = DEFAULT_RETRIEVER,
 ) -> list[dict[str, Any]]:
     """Return up to k chunks for the query, best first.
 
-    retriever is "dense" (default), "bm25" or "hybrid"; anything else raises ValueError.
+    retriever is "bm25" (default), "dense" or "hybrid"; anything else raises ValueError.
     Each result has chunk_id, text, source, page and score: 1 - cosine distance for dense,
     the raw BM25 score for bm25, the summed reciprocal-rank-fusion score for hybrid.
     bm25 never calls the embedder.

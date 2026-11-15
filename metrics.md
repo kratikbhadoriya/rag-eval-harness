@@ -17,11 +17,11 @@ Every change that affects retrieval or answer quality gets a row.
 | 2026-11-15 | Retriever dense (#38), k=10, SAMPLE=30 | faithfulness / context recall / answerable refused | 0.919 / 0.853 / 1 of 25 | 0.926 / 0.853 / 2 of 25 | comparison run, Golden set version d62e7abc, no change adopted; Judge cost $0.0570 |
 | 2026-11-15 | Retriever bm25 (#38), k=10, SAMPLE=30 | faithfulness / context recall / answerable refused | 0.926 / 0.853 / 2 of 25 | 0.896 / 0.927 / 1 of 25 | comparison run vs dense, Golden set version d62e7abc; context recall +0.073 over dense, +0.053 over runner-up hybrid, clears the 0.02 margin: bm25 wins; default change is #39; Judge cost $0.0577 |
 | 2026-11-15 | Retriever hybrid (#38), k=10, SAMPLE=30 | faithfulness / context recall / answerable refused | 0.926 / 0.853 / 2 of 25 | 0.945 / 0.873 / 1 of 25 | comparison run vs dense, Golden set version d62e7abc; context recall +0.020 over dense, 0.053 below bm25; Judge cost $0.0566 |
-
+| 2026-11-15 | default Retriever dense -> bm25 (#39), k=10, SAMPLE=30 | faithfulness / context recall / refusals | 0.919 / 0.853 / 5 of 5 | 0.896 / 0.927 / 5 of 5 | thresholds reset to bm25 baseline - 0.05 (0.846 / 0.877), refusal floor unchanged (baseline_refusal_count 5); values from the #38 bm25 run, no new eval; faithfulness dropped 0.023 while context recall rose 0.073, both within the new thresholds |
 
 ## Starting configuration
 
 - Embedding model: Chroma default all-MiniLM-L6-v2 (local ONNX)
 - Chunk size: 2000 characters
 - Chunk overlap: 400 characters
-- Retrieval: k=10 by default (was 5), plain nearest-neighbour, score = 1 - cosine distance
+- Retrieval: k=10 by default (was 5), bm25 Retriever by default (was dense; #39), score = raw BM25 score (dense: 1 - cosine distance)
