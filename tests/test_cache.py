@@ -108,3 +108,22 @@ def test_missing_corpus_dir_raises_clear_error(tmp_path: Path) -> None:
 
 def test_default_embedder_name_includes_model_identity() -> None:
     assert "all-MiniLM-L6-v2" in embedder_name(default_embed)
+
+
+def test_changed_retriever_misses_and_repeat_hits(env: tuple[Path, CountingEmbedder]) -> None:
+    corpus, emb = env
+    _hits(corpus, emb)
+    assert emb.calls == 1
+    _hits(corpus, emb, retriever="hybrid")
+    assert emb.calls == 2
+    _hits(corpus, emb, retriever="hybrid")
+    _hits(corpus, emb)
+    assert emb.calls == 2
+
+
+def test_bm25_run_is_not_served_dense_results(env: tuple[Path, CountingEmbedder]) -> None:
+    corpus, emb = env
+    dense = _hits(corpus, emb)
+    bm25 = _hits(corpus, emb, retriever="bm25")
+    assert emb.calls == 1
+    assert [r["score"] for r in bm25] != [r["score"] for r in dense]
