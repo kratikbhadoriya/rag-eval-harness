@@ -9,7 +9,12 @@ from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 from rageval.embed import Embedder, default_embed
 from rageval.store import chroma_client, chunk_list_stamp, load_chunks
 
-RETRIEVERS: tuple[str, ...] = ("dense", "bm25")
+RETRIEVERS: tuple[str, ...] = ("dense", "bm25", "hybrid")
+
+# Reciprocal rank fusion constant; 60 is the standard value from the original RRF paper.
+RRF_K = 60
+# Each Retriever contributes this many top candidates to fusion.
+CANDIDATE_DEPTH = 50
 
 
 def tokenize(text: str) -> list[str]:
@@ -50,26 +55,9 @@ def _retrieve_bm25(query: str, k: int, collection: str) -> list[dict[str, Any]]:
     return sorted(results, key=lambda r: r["score"], reverse=True)[:k]
 
 
-def retrieve(
-    query: str,
-    k: int,
-    collection: str = "default",
-    embed: Embedder | None = None,
-    retriever: str = "dense",
+def _retrieve_dense(
+    query: str, k: int, collection: str, embed: Embedder | None
 ) -> list[dict[str, Any]]:
-    """Return up to k chunks for the query, best first.
-
-    retriever is "dense" (default) or "bm25"; anything else raises ValueError.
-    Each result has chunk_id, text, source, page and score: 1 - cosine distance for dense,
-    the raw BM25 score for bm25. bm25 never calls the embedder.
-
-    Raises ValueError if the collection was never ingested (a visible mistake, not an
-    empty list). A collection that exists but has no matches returns [].
-    """
-    if retriever not in RETRIEVERS:
-        raise ValueError(f"unknown retriever {retriever!r}; choose from {', '.join(RETRIEVERS)}")
-    if retriever == "bm25":
-        return _retrieve_bm25(query, k, collection)
     if embed is None:
         embed = default_embed
     try:
@@ -96,3 +84,47 @@ def retrieve(
         for cid, doc, meta, dist in zip(ids, docs, metas, dists, strict=True)
     ]
     return sorted(results, key=lambda r: r["score"], reverse=True)
+
+
+def _retrieve_hybrid(
+    query: str, k: int, collection: str, embed: Embedder | None
+) -> list[dict[str, Any]]:
+    rankings = [
+        _retrieve_dense(query, CANDIDATE_DEPTH, collection, embed),
+        _retrieve_bm25(query, CANDIDATE_DEPTH, collection),
+    ]
+    scores: dict[str, float] = {}
+    by_id: dict[str, dict[str, Any]] = {}
+    for ranking in rankings:
+        for rank, result in enumerate(ranking, start=1):
+            cid = result["chunk_id"]
+            by_id[cid] = result
+            scores[cid] = scores.get(cid, 0.0) + 1.0 / (RRF_K + rank)
+    ordered = sorted(scores, key=lambda cid: scores[cid], reverse=True)[:k]
+    return [{**by_id[cid], "score": scores[cid]} for cid in ordered]
+
+
+def retrieve(
+    query: str,
+    k: int,
+    collection: str = "default",
+    embed: Embedder | None = None,
+    retriever: str = "dense",
+) -> list[dict[str, Any]]:
+    """Return up to k chunks for the query, best first.
+
+    retriever is "dense" (default), "bm25" or "hybrid"; anything else raises ValueError.
+    Each result has chunk_id, text, source, page and score: 1 - cosine distance for dense,
+    the raw BM25 score for bm25, the summed reciprocal-rank-fusion score for hybrid.
+    bm25 never calls the embedder.
+
+    Raises ValueError if the collection was never ingested (a visible mistake, not an
+    empty list). A collection that exists but has no matches returns [].
+    """
+    if retriever not in RETRIEVERS:
+        raise ValueError(f"unknown retriever {retriever!r}; choose from {', '.join(RETRIEVERS)}")
+    if retriever == "bm25":
+        return _retrieve_bm25(query, k, collection)
+    if retriever == "hybrid":
+        return _retrieve_hybrid(query, k, collection, embed)
+    return _retrieve_dense(query, k, collection, embed)
