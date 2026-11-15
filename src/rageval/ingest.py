@@ -7,7 +7,7 @@ import pymupdf
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from rageval.embed import Embedder, default_embed
-from rageval.store import chroma_client
+from rageval.store import chroma_client, save_chunks
 
 CHUNK_SIZE = 2000
 CHUNK_OVERLAP = 400
@@ -45,4 +45,11 @@ def ingest(
             metadatas=metas,  # type: ignore[arg-type]
             embeddings=embed(texts),  # type: ignore[arg-type]
         )
+    save_chunks(
+        collection,
+        [
+            {"chunk_id": i, "text": t, "source": m["source"], "page": m["page"]}
+            for i, t, m in zip(ids, texts, metas, strict=True)
+        ],
+    )
     return len(ids)
