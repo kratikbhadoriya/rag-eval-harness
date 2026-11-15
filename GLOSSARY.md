@@ -20,9 +20,21 @@ _Avoid_: Passage, segment, node, document
 A named group of chunks that are ingested and searched together.
 _Avoid_: Index, database, store
 
+**Retriever**:
+A way of ranking chunks for a query: dense (by meaning), bm25 (by shared words) or hybrid (the two combined).
+_Avoid_: Search, ranker, index
+
+**Reciprocal rank fusion**:
+Combining several retrievers' rankings by giving each chunk a share per ranking that shrinks with its rank, then ordering chunks by their total.
+_Avoid_: Blending, ensemble, merge
+
 **Score**:
-How similar a chunk is to a query, where higher means more similar.
+How well a chunk matches a query under the retriever that ranked it, where higher means a better match. Scores from different retrievers are not comparable.
 _Avoid_: Distance, relevance, confidence
+
+**Golden set version**:
+A short fingerprint of the Golden set's contents, recorded with every measurement so runs are only compared when it matches.
+_Avoid_: Revision, release
 
 **Golden set**:
 The hand-written questions, each paired with a reference answer and the source pages that support it, used to measure the harness. Frozen once written.
