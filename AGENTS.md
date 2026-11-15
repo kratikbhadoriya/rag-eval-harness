@@ -6,9 +6,9 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 
 - `src/rageval/ingest.py`, `retrieve.py`: plain functions over plain dicts
 - `src/rageval/embed.py`: `Embedder` type and lazy `default_embed`
-- `src/rageval/store.py`: shared Chroma persistent client
+- `src/rageval/store.py`: shared Chroma persistent client and the saved Chunk list (JSONL)
 - `src/rageval/generate.py`: retrieve top-k, answer via litellm (OpenAI gpt-4.1-mini, a different model from the gpt-4o-mini Judge); prompt in `src/rageval/prompts/answer.txt`
-- `src/rageval/eval.py`: runs the Golden set through generate + Judge, writes `results.json` / `results.md`
+- `src/rageval/eval.py`: runs the Golden set through generate + Judge (`--retriever {dense,bm25,hybrid}`, default bm25), writes `results.json` / `results.md`
 - `src/rageval/cache.py`: on-disk retrieval cache (`RAGEVAL_CACHE_DIR`), never caches generation or Judge calls
 - `src/rageval/gate.py`: quality and Refusal gate over `results.json` and `eval_thresholds.json`
 - `tests/`: offline tests with a fake embedder and small fixture PDFs
@@ -32,9 +32,11 @@ When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONN
 
 ## Config
 
-`RAGEVAL_CHROMA_DIR` sets the Chroma persistence directory (default `./.chroma`); tests point it at a temp dir via the `chroma_dir` fixture. `OPENAI_API_KEY` is never needed by tests and is deleted for them by an autouse fixture.
+`RAGEVAL_CHROMA_DIR` sets the Chroma persistence directory (default `./.chroma`). `ingest` also saves the exact Chunk list per Collection as `rageval_chunks/<collection>.jsonl` inside it (merged by `chunk_id`), which the `bm25` Retriever indexes (`retrieve(..., retriever="bm25"|"dense"|"hybrid")`); tests point it at a temp dir via the `chroma_dir` fixture. `OPENAI_API_KEY` is never needed by tests and is deleted for them by an autouse fixture.
 
-`RAGEVAL_CACHE_DIR` sets the retrieval cache directory (default `./.eval_cache`, gitignored); tests use a temp dir. `rageval.cache.cached_retriever` caches `retrieve` output only (never generation or Judge), keyed on question, k, collection, chunk size and overlap (`ingest.CHUNK_SIZE`/`CHUNK_OVERLAP`), a SHA-256 of the files in `data/corpus`, and the embedder name (its `name` attribute, else module-qualified function name). Delete the directory to clear it.
+`RAGEVAL_CACHE_DIR` sets the retrieval cache directory (default `./.eval_cache`, gitignored); tests use a temp dir. `rageval.cache.cached_retriever` caches `retrieve` output only (never generation or Judge), keyed on question, k, collection, Retriever, chunk size and overlap (`ingest.CHUNK_SIZE`/`CHUNK_OVERLAP`), a SHA-256 of the files in `data/corpus`, and the embedder name (its `name` attribute, else module-qualified function name). Delete the directory to clear it.
+
+`make eval RETRIEVER=hybrid` (or `python -m rageval.eval --retriever {dense,bm25,hybrid}`, default `bm25`) picks the Retriever; `results.json` records `retriever` and `golden_set_version` (first 8 hex characters of the SHA-256 of the Golden set file).
 
 ## Gate thresholds
 

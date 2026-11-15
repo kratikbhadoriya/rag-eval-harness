@@ -44,7 +44,7 @@ def test_retrieve_without_embed_uses_bundled_model(
 ) -> None:
     ingest([single_pdf])
     stub_model.calls = []
-    results = retrieve("do cats purr?", k=1)
+    results = retrieve("do cats purr?", k=1, retriever="dense")
     assert stub_model.calls == [["do cats purr?"]]
     assert len(results) == 1
     assert "Cats purr" in results[0]["text"]

@@ -4,6 +4,7 @@
 """
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -17,6 +18,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from rageval.cache import cached_retriever
 from rageval.generate import REFUSAL_PHRASE, generate
+from rageval.retrieve import DEFAULT_RETRIEVER, RETRIEVERS, RetrieverName
 
 METRICS = ("faithfulness", "context_recall")
 
@@ -134,6 +136,7 @@ def run(
     generator: Generator | None = None,
     judge: Judge | None = None,
     collection: str = "default",
+    retriever: RetrieverName = DEFAULT_RETRIEVER,
 ) -> dict[str, Any]:
     """Evaluate the answerable Golden set rows and return the results dict.
 
@@ -141,7 +144,8 @@ def run(
     Unanswerable rows go through the generator only (never the Judge) and are
     counted in `skipped_unanswerable` and `refusal`.
 
-    Results: k, sample, rows_total (Golden set size), rows_scored, metrics (mean per metric),
+    Results: k, sample, retriever, golden_set_version (first 8 hex of the Golden set file's
+    SHA-256), rows_total (Golden set size), rows_scored, metrics (mean per metric),
     samples (id, type, question, answer (raw),
     contexts, reference, one score per metric), nan_count, judge_tokens {input, output},
     judge_cost_usd, skipped_unanswerable, refusal {count, total} (answers with REFUSAL_PHRASE),
@@ -151,10 +155,10 @@ def run(
     Raises JudgeError if a sample is still NaN after one retry.
     """
     if generator is None:
-        retriever = cached_retriever(collection)
+        fetch = cached_retriever(collection, retriever=retriever)
 
         def generator(question: str, k: int) -> dict[str, Any]:
-            return generate(question, k, collection=collection, retriever=retriever)
+            return generate(question, k, collection=collection, retriever=fetch)
 
     if judge is None:
         judge = ragas_judge()
@@ -197,6 +201,8 @@ def run(
     return {
         "k": k,
         "sample": sample,
+        "retriever": retriever,
+        "golden_set_version": hashlib.sha256(golden_path.read_bytes()).hexdigest()[:8],
         "rows_total": len(golden),
         "rows_scored": len(rows),
         "metrics": means,
@@ -333,6 +339,7 @@ def main(
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--sample", type=int, default=None, help="score n rows (stratified)")
     parser.add_argument("--collection", default="default")
+    parser.add_argument("--retriever", choices=RETRIEVERS, default=DEFAULT_RETRIEVER)
     parser.add_argument("--out-dir", type=Path, default=Path("."))
     args = parser.parse_args(argv)
 
@@ -345,7 +352,9 @@ def main(
         )
         return 2
     try:
-        results = run(args.golden, args.k, args.sample, generator, judge, args.collection)
+        results = run(
+            args.golden, args.k, args.sample, generator, judge, args.collection, args.retriever
+        )
     except JudgeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         _print_totals(exc.input_tokens, exc.output_tokens, exc.cost)

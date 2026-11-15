@@ -39,6 +39,7 @@ def env(
 
 
 def _hits(corpus: Path, emb: CountingEmbedder, k: int = 2, **kw: Any) -> list[dict[str, Any]]:
+    kw.setdefault("retriever", "dense")  # these tests count embedder calls
     retrieve = cached_retriever("docs", embed=emb, corpus_dir=corpus, **kw)
     return retrieve("what is this?", k)
 
@@ -87,7 +88,7 @@ def test_changed_embedder_name_misses(env: tuple[Path, CountingEmbedder]) -> Non
 
 def test_generation_is_never_cached(env: tuple[Path, CountingEmbedder]) -> None:
     corpus, emb = env
-    retrieve = cached_retriever("docs", embed=emb, corpus_dir=corpus)
+    retrieve = cached_retriever("docs", embed=emb, corpus_dir=corpus, retriever="dense")
     calls: list[Any] = []
 
     def completion(**kwargs: Any) -> Any:
@@ -108,3 +109,22 @@ def test_missing_corpus_dir_raises_clear_error(tmp_path: Path) -> None:
 
 def test_default_embedder_name_includes_model_identity() -> None:
     assert "all-MiniLM-L6-v2" in embedder_name(default_embed)
+
+
+def test_changed_retriever_misses_and_repeat_hits(env: tuple[Path, CountingEmbedder]) -> None:
+    corpus, emb = env
+    _hits(corpus, emb)
+    assert emb.calls == 1
+    _hits(corpus, emb, retriever="hybrid")
+    assert emb.calls == 2
+    _hits(corpus, emb, retriever="hybrid")
+    _hits(corpus, emb)
+    assert emb.calls == 2
+
+
+def test_bm25_run_is_not_served_dense_results(env: tuple[Path, CountingEmbedder]) -> None:
+    corpus, emb = env
+    dense = _hits(corpus, emb)
+    bm25 = _hits(corpus, emb, retriever="bm25")
+    assert emb.calls == 1
+    assert [r["score"] for r in bm25] != [r["score"] for r in dense]

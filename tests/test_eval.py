@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -334,3 +335,61 @@ def test_judge_model_differs_from_generator_model() -> None:
 
     assert JUDGE_MODEL != DEFAULT_MODEL
     assert JUDGE_MODEL.split("/")[-1] != DEFAULT_MODEL.split("/")[-1]
+
+
+def test_cli_rejects_invalid_retriever_listing_choices(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--golden", str(_write_golden(tmp_path)), "--retriever", "bogus"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert all(name in err for name in ("dense", "bm25", "hybrid"))
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [(["--retriever", "hybrid"], "hybrid"), (["--retriever", "dense"], "dense"), ([], "bm25")],
+)
+def test_cli_retriever_reaches_retrieve_and_is_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flags: list[str], expected: str
+) -> None:
+    seen: list[str] = []
+
+    def fake_retrieve(question: str, k: int, **kwargs: Any) -> list[dict[str, Any]]:
+        seen.append(kwargs["retriever"])
+        return [{"chunk_id": "c", "text": "ctx", "source": "s", "page": 1, "score": 1.0}]
+
+    def fake_generate(question: str, k: int, **kwargs: Any) -> dict[str, Any]:
+        return {"answer": "A", "contexts": kwargs["retriever"](question, k)}
+
+    (tmp_path / "data" / "corpus").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("RAGEVAL_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setattr("rageval.cache.retrieve", fake_retrieve)
+    monkeypatch.setattr("rageval.eval.generate", fake_generate)
+    out = tmp_path / "out"
+    code = main(
+        ["--golden", str(_write_golden(tmp_path)), *flags, "--out-dir", str(out)],
+        judge=FakeJudge(),
+    )
+    assert code == 0
+    assert seen and set(seen) == {expected}
+    assert json.loads((out / "results.json").read_text())["retriever"] == expected
+
+
+def test_results_default_retriever_is_bm25(tmp_path: Path) -> None:
+    results = run(_write_golden(tmp_path), 2, generator=FakeGenerator(), judge=FakeJudge())
+    assert results["retriever"] == "bm25"
+
+
+def test_golden_set_version_is_8_hex_and_tracks_file_contents(tmp_path: Path) -> None:
+    golden = _write_golden(tmp_path)
+    first = run(golden, 2, generator=FakeGenerator(), judge=FakeJudge())["golden_set_version"]
+    again = run(golden, 2, generator=FakeGenerator(), judge=FakeJudge())["golden_set_version"]
+    golden.write_text(golden.read_text() + "\n")
+    changed = run(golden, 2, generator=FakeGenerator(), judge=FakeJudge())["golden_set_version"]
+    assert re.fullmatch(r"[0-9a-f]{8}", first)
+    assert again == first
+    assert changed != first
