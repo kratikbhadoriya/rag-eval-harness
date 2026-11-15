@@ -1,6 +1,6 @@
 """On-disk cache for retrieval output (never generation or Judge calls).
 
-Key: question, k, collection, chunk size, chunk overlap, corpus checksum, embedder name.
+Key: question, k, collection, chunk size, chunk overlap, corpus checksum, embedder name, Retriever.
 Directory: `RAGEVAL_CACHE_DIR` (default `./.eval_cache`, gitignored).
 """
 
@@ -50,6 +50,7 @@ def cached_retriever(
     corpus_dir: Path = DEFAULT_CORPUS_DIR,
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
+    retriever: str = "dense",
 ) -> Retriever:
     """Return a retriever that reads/writes the cache around `retrieve`.
 
@@ -63,6 +64,7 @@ def cached_retriever(
         "chunk_overlap": chunk_overlap,
         "corpus": corpus_checksum(corpus_dir),
         "embedder": embedder_name(embed),
+        "retriever": retriever,
     }
 
     def fetch(question: str, k: int) -> list[dict[str, Any]]:
@@ -70,7 +72,7 @@ def cached_retriever(
         path = cache_dir() / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
         if path.exists():
             return list(json.loads(path.read_text(encoding="utf-8")))
-        results = retrieve(question, k, collection=collection, embed=embed)
+        results = retrieve(question, k, collection=collection, embed=embed, retriever=retriever)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(results), encoding="utf-8")
         return results
