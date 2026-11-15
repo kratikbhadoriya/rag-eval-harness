@@ -34,6 +34,8 @@ def _retrieve_bm25(query: str, k: int, collection: str) -> list[dict[str, Any]]:
     stamp = chunk_list_stamp(collection)
     cached = _bm25_indexes.get(stamp[0])
     if cached is None or cached[0] != stamp:
+        # `chunks is None` (never ingested) was handled above; `[]` is an ingested
+        # Collection with zero Chunks, and BM25Okapi([]) divides by zero, so no index.
         index = BM25Okapi([tokenize(c["text"]) for c in chunks]) if chunks else None
         cached = (stamp, index, chunks)
         _bm25_indexes[stamp[0]] = cached
