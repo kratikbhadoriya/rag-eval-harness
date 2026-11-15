@@ -32,7 +32,7 @@ When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONN
 
 ## Config
 
-`RAGEVAL_CHROMA_DIR` sets the Chroma persistence directory (default `./.chroma`); tests point it at a temp dir via the `chroma_dir` fixture. `OPENAI_API_KEY` is never needed by tests and is deleted for them by an autouse fixture.
+`RAGEVAL_CHROMA_DIR` sets the Chroma persistence directory (default `./.chroma`). `ingest` also saves the exact Chunk list per Collection as `rageval_chunks/<collection>.jsonl` inside it (merged by `chunk_id`), which the `bm25` Retriever indexes (`retrieve(..., retriever="dense"|"bm25")`); tests point it at a temp dir via the `chroma_dir` fixture. `OPENAI_API_KEY` is never needed by tests and is deleted for them by an autouse fixture.
 
 `RAGEVAL_CACHE_DIR` sets the retrieval cache directory (default `./.eval_cache`, gitignored); tests use a temp dir. `rageval.cache.cached_retriever` caches `retrieve` output only (never generation or Judge), keyed on question, k, collection, chunk size and overlap (`ingest.CHUNK_SIZE`/`CHUNK_OVERLAP`), a SHA-256 of the files in `data/corpus`, and the embedder name (its `name` attribute, else module-qualified function name). Delete the directory to clear it.
 

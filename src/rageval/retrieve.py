@@ -1,11 +1,53 @@
 """Retrieve the most similar chunks for a query."""
 
+import re
 from typing import Any
 
 from chromadb.errors import NotFoundError
+from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
 from rageval.embed import Embedder, default_embed
-from rageval.store import chroma_client
+from rageval.store import chroma_client, chunk_list_stamp, load_chunks
+
+RETRIEVERS: tuple[str, ...] = ("dense", "bm25")
+
+
+def tokenize(text: str) -> list[str]:
+    """Lowercase word tokens; shared by Chunks and queries. No stemming, no stopwords."""
+    return re.findall(r"\w+", text.lower())
+
+
+_bm25_indexes: dict[str, tuple[tuple[str, int, int], BM25Okapi | None, list[dict[str, Any]]]] = {}
+
+
+def _retrieve_bm25(query: str, k: int, collection: str) -> list[dict[str, Any]]:
+    chunks = load_chunks(collection)
+    if chunks is None:
+        raise ValueError(f"collection {collection!r} was never ingested")
+    stamp = chunk_list_stamp(collection)
+    cached = _bm25_indexes.get(stamp[0])
+    if cached is None or cached[0] != stamp:
+        index = BM25Okapi([tokenize(c["text"]) for c in chunks]) if chunks else None
+        cached = (stamp, index, chunks)
+        _bm25_indexes[stamp[0]] = cached
+    _, index, chunks = cached
+    terms = tokenize(query)
+    if index is None or not terms:
+        return []
+    scores = index.get_scores(terms)
+    term_set = set(terms)
+    results = [
+        {
+            "chunk_id": c["chunk_id"],
+            "text": c["text"],
+            "source": c["source"],
+            "page": int(c["page"]),
+            "score": float(score),
+        }
+        for c, score in zip(chunks, scores, strict=True)
+        if term_set & set(tokenize(c["text"]))
+    ]
+    return sorted(results, key=lambda r: r["score"], reverse=True)[:k]
 
 
 def retrieve(
@@ -13,14 +55,21 @@ def retrieve(
     k: int,
     collection: str = "default",
     embed: Embedder | None = None,
+    retriever: str = "dense",
 ) -> list[dict[str, Any]]:
-    """Return up to k chunks most similar to the query, best first.
+    """Return up to k chunks for the query, best first.
 
-    Each result has chunk_id, text, source, page and score (1 - cosine distance).
+    retriever is "dense" (default) or "bm25"; anything else raises ValueError.
+    Each result has chunk_id, text, source, page and score: 1 - cosine distance for dense,
+    the raw BM25 score for bm25. bm25 never calls the embedder.
 
     Raises ValueError if the collection was never ingested (a visible mistake, not an
     empty list). A collection that exists but has no matches returns [].
     """
+    if retriever not in RETRIEVERS:
+        raise ValueError(f"unknown retriever {retriever!r}; choose from {', '.join(RETRIEVERS)}")
+    if retriever == "bm25":
+        return _retrieve_bm25(query, k, collection)
     if embed is None:
         embed = default_embed
     try:
