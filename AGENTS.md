@@ -6,7 +6,7 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 
 - `src/rageval/ingest.py`, `retrieve.py`: plain functions over plain dicts
 - `src/rageval/embed.py`: `Embedder` type and lazy `default_embed`
-- `src/rageval/store.py`: shared Chroma persistent client
+- `src/rageval/store.py`: shared Chroma persistent client and the saved Chunk list (JSONL)
 - `src/rageval/generate.py`: retrieve top-k, answer via litellm (OpenAI gpt-4.1-mini, a different model from the gpt-4o-mini Judge); prompt in `src/rageval/prompts/answer.txt`
 - `src/rageval/eval.py`: runs the Golden set through generate + Judge (`--retriever {dense,bm25,hybrid}`, default bm25), writes `results.json` / `results.md`
 - `src/rageval/cache.py`: on-disk retrieval cache (`RAGEVAL_CACHE_DIR`), never caches generation or Judge calls
