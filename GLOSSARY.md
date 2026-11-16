@@ -24,6 +24,10 @@ _Avoid_: Index, database, store
 A way of ranking chunks for a query: dense (by meaning), bm25 (by shared words) or hybrid (the two combined).
 _Avoid_: Search, ranker, index
 
+**Reranker**:
+A second stage that rescores the chunks a Retriever returned with a cross-encoder and keeps the best few. It is not a Retriever: it only reorders candidates, and its scores are on their own scale, not comparable with a Retriever's Score.
+_Avoid_: Second retriever, reranking retriever
+
 **Reciprocal rank fusion**:
 Combining several retrievers' rankings by giving each chunk a share per ranking that shrinks with its rank, then ordering chunks by their total.
 _Avoid_: Blending, ensemble, merge
