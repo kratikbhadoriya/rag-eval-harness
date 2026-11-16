@@ -26,4 +26,4 @@ gate:
 	uv run python -m rageval.gate
 
 eval:
-	uv run python -m rageval.eval $(if $(SAMPLE),--sample $(SAMPLE)) $(if $(RETRIEVER),--retriever $(RETRIEVER))
+	uv run python -m rageval.eval $(if $(SAMPLE),--sample $(SAMPLE)) $(if $(RETRIEVER),--retriever $(RETRIEVER)) $(if $(RERANK),--rerank)

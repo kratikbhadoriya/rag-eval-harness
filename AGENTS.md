@@ -36,7 +36,7 @@ When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONN
 
 `RAGEVAL_CACHE_DIR` sets the retrieval cache directory (default `./.eval_cache`, gitignored); tests use a temp dir. `rageval.cache.cached_retriever` caches `retrieve` output only (never generation or Judge), keyed on question, k, collection, Retriever, chunk size and overlap (`ingest.CHUNK_SIZE`/`CHUNK_OVERLAP`), a SHA-256 of the files in `data/corpus`, and the embedder name (its `name` attribute, else module-qualified function name). Delete the directory to clear it.
 
-`make eval RETRIEVER=hybrid` (or `python -m rageval.eval --retriever {dense,bm25,hybrid}`, default `bm25`) picks the Retriever; `results.json` records `retriever` and `golden_set_version` (first 8 hex characters of the SHA-256 of the Golden set file).
+`make eval RETRIEVER=hybrid` (or `python -m rageval.eval --retriever {dense,bm25,hybrid}`, default `bm25`) picks the Retriever; `make eval RERANK=1` (or `--rerank`, bm25 only, off by default) reranks the bm25 top-20 with the local cross-encoder, k defaults to 5 (override with `--k`), and `results.json` gains a `rerank` block (candidates, top_n, latency_ms n/p50/p95); without it the results shape is unchanged. `results.json` records `retriever` and `golden_set_version` (first 8 hex characters of the SHA-256 of the Golden set file).
 
 ## Gate thresholds
 
