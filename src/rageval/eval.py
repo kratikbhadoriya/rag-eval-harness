@@ -18,6 +18,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from rageval.cache import cached_retriever
 from rageval.generate import REFUSAL_PHRASE, generate
+from rageval.rerank import CANDIDATES, Scorer, percentile, reranked_retriever
 from rageval.retrieve import DEFAULT_RETRIEVER, RETRIEVERS, RetrieverName
 
 METRICS = ("faithfulness", "context_recall")
@@ -31,6 +32,9 @@ Judge = Callable[[dict[str, Any]], dict[str, float]]
 Returns {"faithfulness", "context_recall", "input_tokens", "output_tokens", "cost"}; a metric
 the Judge could not score is NaN.
 """
+
+DEFAULT_K = 10
+DEFAULT_RERANK_K = 5
 
 _CITATION = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
 
@@ -63,6 +67,19 @@ def strip_citations(answer: str) -> str:
     """Drop `[n]` markers; the spike's Faithfulness 0.0 on a supported answer is suspected to be
     caused by them, so the Judge never sees them. Results keep the raw answer."""
     return _CITATION.sub("", answer)
+
+
+def default_scorer() -> Scorer:
+    """Adapt rerank_scorer.default_score (query, texts) to the Scorer (pairs) signature."""
+    from rageval import rerank_scorer
+
+    def score(pairs: list[tuple[str, str]]) -> list[float]:
+        out: list[float] = []
+        for query in dict.fromkeys(q for q, _ in pairs):
+            out += rerank_scorer.default_score(query, [t for q, t in pairs if q == query])
+        return out
+
+    return score
 
 
 def _load_golden(path: Path) -> list[dict[str, Any]]:
@@ -137,6 +154,8 @@ def run(
     judge: Judge | None = None,
     collection: str = "default",
     retriever: RetrieverName = DEFAULT_RETRIEVER,
+    rerank: bool = False,
+    scorer: Scorer | None = None,
 ) -> dict[str, Any]:
     """Evaluate the answerable Golden set rows and return the results dict.
 
@@ -152,10 +171,19 @@ def run(
     answerable_refused {count, total} (answerable rows the generator refused: usually a retrieval
     miss, scored 0 Faithfulness).
 
+    `rerank` (bm25 only) wraps the default generator's cached retriever in a Reranker (top-20
+    candidates, keep k; `scorer` defaults to the local cross-encoder) and adds a `rerank` block:
+    candidates, top_n, latency_ms {n, p50, p95} (None percentiles when n is 0). Off, no block.
+
     Raises JudgeError if a sample is still NaN after one retry.
     """
+    if rerank and retriever != "bm25":
+        raise ValueError("rerank applies to the bm25 retriever only")
+    timings_ms: list[float] = []
     if generator is None:
         fetch = cached_retriever(collection, retriever=retriever)
+        if rerank:
+            fetch = reranked_retriever(fetch, scorer or default_scorer(), timings_ms)
 
         def generator(question: str, k: int) -> dict[str, Any]:
             return generate(question, k, collection=collection, retriever=fetch)
@@ -198,7 +226,7 @@ def run(
     means = {
         m: (sum(s[m] for s in samples) / len(samples) if samples else math.nan) for m in METRICS
     }
-    return {
+    results: dict[str, Any] = {
         "k": k,
         "sample": sample,
         "retriever": retriever,
@@ -217,6 +245,17 @@ def run(
             "total": len(samples),
         },
     }
+    if rerank:
+        results["rerank"] = {
+            "candidates": CANDIDATES,
+            "top_n": k,
+            "latency_ms": {
+                "n": len(timings_ms),
+                "p50": percentile(timings_ms, 50) if timings_ms else None,
+                "p95": percentile(timings_ms, 95) if timings_ms else None,
+            },
+        }
+    return results
 
 
 def format_markdown(results: dict[str, Any]) -> str:
@@ -336,12 +375,23 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(prog="rageval.eval", description=__doc__)
     parser.add_argument("--golden", type=Path, default=Path("golden/golden.jsonl"))
-    parser.add_argument("--k", type=int, default=10)
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=None,
+        help=f"contexts per question (default {DEFAULT_K}, {DEFAULT_RERANK_K} with --rerank)",
+    )
     parser.add_argument("--sample", type=int, default=None, help="score n rows (stratified)")
     parser.add_argument("--collection", default="default")
     parser.add_argument("--retriever", choices=RETRIEVERS, default=DEFAULT_RETRIEVER)
+    parser.add_argument(
+        "--rerank", action="store_true", help="cross-encoder rerank bm25 top-20 (bm25 only)"
+    )
     parser.add_argument("--out-dir", type=Path, default=Path("."))
     args = parser.parse_args(argv)
+    if args.rerank and args.retriever != "bm25":
+        parser.error("--rerank applies to the bm25 retriever only")
+    k = args.k if args.k is not None else (DEFAULT_RERANK_K if args.rerank else DEFAULT_K)
 
     load_dotenv(find_dotenv(usecwd=True))
     needs_key = judge is None or generator is None
@@ -353,7 +403,14 @@ def main(
         return 2
     try:
         results = run(
-            args.golden, args.k, args.sample, generator, judge, args.collection, args.retriever
+            args.golden,
+            k,
+            args.sample,
+            generator,
+            judge,
+            args.collection,
+            args.retriever,
+            rerank=args.rerank,
         )
     except JudgeError as exc:
         print(f"error: {exc}", file=sys.stderr)

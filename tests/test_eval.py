@@ -393,3 +393,70 @@ def test_golden_set_version_is_8_hex_and_tracks_file_contents(tmp_path: Path) ->
     assert re.fullmatch(r"[0-9a-f]{8}", first)
     assert again == first
     assert changed != first
+
+
+def _twenty_chunks(question: str, k: int, **kwargs: Any) -> list[dict[str, Any]]:
+    assert k == 20  # cache sits below the Reranker: it sees the candidate fetch
+    return [
+        {"chunk_id": f"c{i}", "text": f"t{i}", "source": "s", "page": 1, "score": 1.0}
+        for i in range(k)
+    ]
+
+
+def _plumb(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def fake_generate(question: str, k: int, **kwargs: Any) -> dict[str, Any]:
+        return {"answer": "A", "contexts": kwargs["retriever"](question, k)}
+
+    (tmp_path / "data" / "corpus").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("RAGEVAL_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr("rageval.cache.retrieve", _twenty_chunks)
+    monkeypatch.setattr("rageval.eval.generate", fake_generate)
+
+
+def _rank(text: str) -> float:
+    return float(text[1:]) if text.startswith("t") else 0.0
+
+
+def _prefer_last(pairs: list[tuple[str, str]]) -> list[float]:
+    return [_rank(text) for _q, text in pairs]
+
+
+def test_rerank_on_returns_top_n_contexts_and_rerank_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _plumb(monkeypatch, tmp_path)
+    res = run(_write_golden(tmp_path), 5, judge=FakeJudge(), rerank=True, scorer=_prefer_last)
+    assert res["samples"][0]["contexts"] == ["t19", "t18", "t17", "t16", "t15"]
+    block = res["rerank"]
+    assert (block["candidates"], block["top_n"]) == (20, 5)
+    lat = block["latency_ms"]
+    assert lat["n"] == 3  # 2 answerable + 1 unanswerable
+    assert 0 <= lat["p50"] <= lat["p95"]
+
+
+def test_rerank_off_results_have_no_rerank_block(tmp_path: Path) -> None:
+    res = run(_write_golden(tmp_path), 3, generator=FakeGenerator(), judge=FakeJudge())
+    assert "rerank" not in res
+
+
+def test_cli_rerank_flag_defaults_k_to_5_and_k_can_be_overridden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _plumb(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "rageval.rerank_scorer.default_score", lambda q, texts: [_rank(t) for t in texts]
+    )
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    golden = str(_write_golden(tmp_path))
+    ks = []
+    for extra in ([], ["--k", "3"]):
+        out = tmp_path / f"out{len(ks)}"
+        assert (
+            main(["--golden", golden, "--rerank", "--out-dir", str(out), *extra], judge=FakeJudge())
+            == 0
+        )
+        results = json.loads((out / "results.json").read_text())
+        assert results["rerank"]["top_n"] == results["k"]
+        ks.append(results["k"])
+    assert ks == [5, 3]
