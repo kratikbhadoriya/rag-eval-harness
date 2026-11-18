@@ -1,7 +1,8 @@
-"""Reranker: ordering, top-N, field preservation, ties, empty input, latency wrapper."""
+"""Reranker: ordering, top-k, field preservation, ties, empty input, latency wrapper."""
 
 from typing import Any
 
+from rageval.ingest import CHUNK_SIZE
 from rageval.rerank import percentile, rerank, reranked_retriever
 
 
@@ -21,7 +22,7 @@ class FakeScorer:
         return [self.table.get(text, 0.0) for _, text in pairs]
 
 
-def test_orders_by_scorer_keeps_top_n_and_preserves_fields() -> None:
+def test_orders_by_scorer_keeps_k_and_preserves_fields() -> None:
     scorer = FakeScorer({"low": 0.1, "high": 9.0, "mid": 5.0})
     out = rerank("q", [chunk("1", "low"), chunk("2", "high"), chunk("3", "mid")], 2, scorer)
     assert [c["chunk_id"] for c in out] == ["2", "3"]
@@ -72,6 +73,16 @@ def test_warmup_untimed_and_one_timing_per_query() -> None:
     retrieve_fn("q2", 5)
     assert len(timings) == 2
     assert all(t >= 0 for t in timings)
+
+
+def test_warmup_scores_full_size_batch_untimed() -> None:
+    scorer = FakeScorer({})
+    timings: list[float] = []
+    reranked_retriever(lambda q, k: [], scorer, timings, candidates=7)
+    assert timings == []
+    assert len(scorer.calls) == 1
+    assert len(scorer.calls[0]) == 7
+    assert all(len(text) == CHUNK_SIZE for _q, text in scorer.calls[0])
 
 
 def test_empty_fetch_still_records_one_timing_without_scoring() -> None:

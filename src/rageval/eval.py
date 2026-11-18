@@ -35,7 +35,6 @@ the Judge could not score is NaN.
 """
 
 DEFAULT_K = 10
-DEFAULT_RERANK_K = 5
 
 _CITATION = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
 
@@ -159,14 +158,12 @@ def run(
     answerable_refused {count, total} (answerable rows the generator refused: usually a retrieval
     miss, scored 0 Faithfulness).
 
-    `rerank` (bm25 only) wraps the default generator's cached retriever in a Reranker (top-20
+    `rerank` wraps the default generator's cached retriever in a Reranker (top-20
     candidates, keep k; `scorer` defaults to the local cross-encoder) and adds a `rerank` block:
-    candidates, top_n, latency_ms {n, p50, p95} (None percentiles when n is 0). Off, no block.
+    candidates, k, latency_ms {n, p50, p95} (None percentiles when n is 0). Off, no block.
 
     Raises JudgeError if a sample is still NaN after one retry.
     """
-    if rerank and retriever != "bm25":
-        raise ValueError("rerank applies to the bm25 retriever only")
     if rerank and generator is not None:
         raise ValueError(
             "rerank=True needs the default generator: an injected generator bypasses the "
@@ -243,7 +240,7 @@ def run(
     if rerank:
         results["rerank"] = {
             "candidates": CANDIDATES,
-            "top_n": k,
+            "k": k,
             "latency_ms": {
                 "n": len(timings_ms),
                 "p50": percentile(timings_ms, 50) if timings_ms else None,
@@ -374,19 +371,17 @@ def main(
         "--k",
         type=int,
         default=None,
-        help=f"contexts per question (default {DEFAULT_K}, {DEFAULT_RERANK_K} with --rerank)",
+        help=f"contexts per question, also the kept count with --rerank (default {DEFAULT_K})",
     )
     parser.add_argument("--sample", type=int, default=None, help="score n rows (stratified)")
     parser.add_argument("--collection", default="default")
     parser.add_argument("--retriever", choices=RETRIEVERS, default=DEFAULT_RETRIEVER)
     parser.add_argument(
-        "--rerank", action="store_true", help="cross-encoder rerank bm25 top-20 (bm25 only)"
+        "--rerank", action="store_true", help="cross-encoder rerank the retriever top-20, keep k"
     )
     parser.add_argument("--out-dir", type=Path, default=Path("."))
     args = parser.parse_args(argv)
-    if args.rerank and args.retriever != "bm25":
-        parser.error("--rerank applies to the bm25 retriever only")
-    k = args.k if args.k is not None else (DEFAULT_RERANK_K if args.rerank else DEFAULT_K)
+    k = args.k if args.k is not None else DEFAULT_K
 
     load_dotenv(find_dotenv(usecwd=True))
     needs_key = judge is None or generator is None

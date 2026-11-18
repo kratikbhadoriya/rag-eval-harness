@@ -1,4 +1,4 @@
-"""Reranker: rescore retrieved chunks with a cross-encoder and keep the best N.
+"""Reranker: rescore retrieved chunks with a cross-encoder and keep the best k.
 
 Reranker scores are a separate scale from a Retriever's Score; never compare them.
 The scoring step is injectable: a function over (query, chunk text) pairs.
@@ -8,6 +8,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from rageval.ingest import CHUNK_SIZE
+
 Scorer = Callable[[list[tuple[str, str]]], list[float]]
 RetrieveFn = Callable[[str, int], list[dict[str, Any]]]
 
@@ -15,9 +17,9 @@ CANDIDATES = 20  # chunks fetched from the Retriever before reranking
 
 
 def rerank(
-    query: str, chunks: list[dict[str, Any]], top_n: int, scorer: Scorer
+    query: str, chunks: list[dict[str, Any]], k: int, scorer: Scorer
 ) -> list[dict[str, Any]]:
-    """Return the top_n chunks by scorer score, best first, with `score` replaced.
+    """Return the k chunks by scorer score, best first, with `score` replaced.
 
     Ties keep the incoming (Retriever) order. An empty list never calls the scorer.
     """
@@ -25,7 +27,7 @@ def rerank(
         return []
     scores = scorer([(query, c["text"]) for c in chunks])
     order = sorted(range(len(chunks)), key=lambda i: -scores[i])  # stable: ties keep order
-    return [{**chunks[i], "score": float(scores[i])} for i in order[:top_n]]
+    return [{**chunks[i], "score": float(scores[i])} for i in order[:k]]
 
 
 def reranked_retriever(
@@ -36,10 +38,12 @@ def reranked_retriever(
 ) -> RetrieveFn:
     """Wrap `fetch(question, k)`: fetch `candidates` chunks, rerank, return k.
 
-    Runs one untimed warm-up scorer call now. Each call then appends the milliseconds
-    spent in the rerank step alone (not the fetch) to `timings_ms`, which the caller owns.
+    Runs one untimed warm-up scorer call now, on `candidates` dummy pairs of CHUNK_SIZE
+    characters, so a full-size batch is scored once before any timing.
+    Each call then appends the milliseconds spent in
+    the rerank step alone (not the fetch) to `timings_ms`, which the caller owns.
     """
-    scorer([("warm-up", "warm-up")])
+    scorer([("warm-up", "w" * CHUNK_SIZE)] * candidates)
 
     def retrieve_reranked(question: str, k: int) -> list[dict[str, Any]]:
         found = fetch(question, candidates)

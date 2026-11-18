@@ -422,14 +422,14 @@ def _prefer_last(pairs: list[tuple[str, str]]) -> list[float]:
     return [_rank(text) for _q, text in pairs]
 
 
-def test_rerank_on_returns_top_n_contexts_and_rerank_block(
+def test_rerank_on_returns_k_contexts_and_rerank_block(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _plumb(monkeypatch, tmp_path)
     res = run(_write_golden(tmp_path), 5, judge=FakeJudge(), rerank=True, scorer=_prefer_last)
     assert res["samples"][0]["contexts"] == ["t19", "t18", "t17", "t16", "t15"]
     block = res["rerank"]
-    assert (block["candidates"], block["top_n"]) == (20, 5)
+    assert (block["candidates"], block["k"]) == (20, 5)
     lat = block["latency_ms"]
     assert lat["n"] == 3  # 2 answerable + 1 unanswerable
     assert 0 <= lat["p50"] <= lat["p95"]
@@ -440,12 +440,53 @@ def test_rerank_with_injected_generator_raises() -> None:
         run(Path("unused"), 5, generator=FakeGenerator(), judge=FakeJudge(), rerank=True)
 
 
+@pytest.mark.parametrize("name", ["dense", "bm25", "hybrid"])
+def test_rerank_runs_for_every_retriever(
+    name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _plumb(monkeypatch, tmp_path)
+    seen: list[Any] = []
+
+    def fake_retrieve(question: str, k: int, **kwargs: Any) -> list[dict[str, Any]]:
+        seen.append(kwargs["retriever"])
+        return _twenty_chunks(question, k)
+
+    monkeypatch.setattr("rageval.cache.retrieve", fake_retrieve)
+    res = run(
+        _write_golden(tmp_path),
+        5,
+        judge=FakeJudge(),
+        retriever=name,  # type: ignore[arg-type]
+        rerank=True,
+        scorer=_prefer_last,
+    )
+    assert res["retriever"] == name
+    assert set(seen) == {name}
+    assert res["samples"][0]["contexts"] == ["t19", "t18", "t17", "t16", "t15"]
+    assert res["rerank"]["k"] == 5
+
+
+@pytest.mark.parametrize("name", ["dense", "bm25", "hybrid"])
+def test_cli_rerank_accepted_for_every_retriever(
+    name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _plumb(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "rageval.rerank_scorer.default_score", lambda q, texts: [_rank(t) for t in texts]
+    )
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    out = tmp_path / "out"
+    argv = ["--golden", str(_write_golden(tmp_path)), "--retriever", name, "--rerank"]
+    assert main([*argv, "--out-dir", str(out)], judge=FakeJudge()) == 0
+    assert json.loads((out / "results.json").read_text())["retriever"] == name
+
+
 def test_rerank_off_results_have_no_rerank_block(tmp_path: Path) -> None:
     res = run(_write_golden(tmp_path), 3, generator=FakeGenerator(), judge=FakeJudge())
     assert "rerank" not in res
 
 
-def test_cli_rerank_flag_defaults_k_to_5_and_k_can_be_overridden(
+def test_cli_rerank_flag_defaults_k_to_10_and_k_can_be_overridden(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _plumb(monkeypatch, tmp_path)
@@ -462,6 +503,6 @@ def test_cli_rerank_flag_defaults_k_to_5_and_k_can_be_overridden(
             == 0
         )
         results = json.loads((out / "results.json").read_text())
-        assert results["rerank"]["top_n"] == results["k"]
+        assert results["rerank"]["k"] == results["k"]
         ks.append(results["k"])
-    assert ks == [5, 3]
+    assert ks == [10, 3]
