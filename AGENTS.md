@@ -18,7 +18,7 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 ## Commands
 
 - `make install`, `make lint`, `make fmt`, `make typecheck`, `make test`, `make check`
-- `make ingest` (ingest `data/corpus`), `make eval [SAMPLE=n]` (needs `OPENAI_API_KEY`), `make gate` (checks `results.json` against `eval_thresholds.json`)
+- `make ingest` (ingest `data/corpus`), `make eval [SAMPLE=n] [RERANK=1]` (needs `OPENAI_API_KEY`; `RERANK=1` also needs `uv sync --group rerank`), `make gate` (checks `results.json` against `eval_thresholds.json`)
 
 ## Rules
 

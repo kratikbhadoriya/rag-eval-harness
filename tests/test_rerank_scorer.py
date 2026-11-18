@@ -64,3 +64,22 @@ def test_empty_texts_return_empty_without_loading(
 ) -> None:
     assert rerank_scorer.default_score("q", []) == []
     assert stub_cross_encoder.inits == []
+
+
+def test_score_pairs_single_query_is_one_model_call(
+    stub_cross_encoder: type[StubCrossEncoder],
+) -> None:
+    assert rerank_scorer.score_pairs([("q", "a"), ("q", "abc")]) == [1.0, 3.0]
+    assert stub_cross_encoder.predicted == [[("q", "a"), ("q", "abc")]]
+
+
+def test_score_pairs_mixed_queries_keep_input_order(
+    stub_cross_encoder: type[StubCrossEncoder],
+) -> None:
+    pairs = [("q1", "a"), ("q2", "abcd"), ("q1", "ab")]
+    assert rerank_scorer.score_pairs(pairs) == [1.0, 4.0, 2.0]
+
+
+def test_score_pairs_empty_returns_empty(stub_cross_encoder: type[StubCrossEncoder]) -> None:
+    assert rerank_scorer.score_pairs([]) == []
+    assert stub_cross_encoder.inits == []

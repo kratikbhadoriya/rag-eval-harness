@@ -16,6 +16,7 @@ from typing import Any
 
 from dotenv import find_dotenv, load_dotenv
 
+from rageval import rerank_scorer
 from rageval.cache import cached_retriever
 from rageval.generate import REFUSAL_PHRASE, generate
 from rageval.rerank import CANDIDATES, Scorer, percentile, reranked_retriever
@@ -67,19 +68,6 @@ def strip_citations(answer: str) -> str:
     """Drop `[n]` markers; the spike's Faithfulness 0.0 on a supported answer is suspected to be
     caused by them, so the Judge never sees them. Results keep the raw answer."""
     return _CITATION.sub("", answer)
-
-
-def default_scorer() -> Scorer:
-    """Adapt rerank_scorer.default_score (query, texts) to the Scorer (pairs) signature."""
-    from rageval import rerank_scorer
-
-    def score(pairs: list[tuple[str, str]]) -> list[float]:
-        out: list[float] = []
-        for query in dict.fromkeys(q for q, _ in pairs):
-            out += rerank_scorer.default_score(query, [t for q, t in pairs if q == query])
-        return out
-
-    return score
 
 
 def _load_golden(path: Path) -> list[dict[str, Any]]:
@@ -179,11 +167,18 @@ def run(
     """
     if rerank and retriever != "bm25":
         raise ValueError("rerank applies to the bm25 retriever only")
+    if rerank and generator is not None:
+        raise ValueError(
+            "rerank=True needs the default generator: an injected generator bypasses the "
+            "Reranker, so no reranking would happen"
+        )
     timings_ms: list[float] = []
     if generator is None:
         fetch = cached_retriever(collection, retriever=retriever)
         if rerank:
-            fetch = reranked_retriever(fetch, scorer or default_scorer(), timings_ms)
+            fetch = reranked_retriever(
+                fetch, scorer or rerank_scorer.score_pairs, timings_ms, candidates=CANDIDATES
+            )
 
         def generator(question: str, k: int) -> dict[str, Any]:
             return generate(question, k, collection=collection, retriever=fetch)
