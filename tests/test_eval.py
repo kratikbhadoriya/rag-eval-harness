@@ -435,6 +435,11 @@ def test_rerank_on_returns_top_n_contexts_and_rerank_block(
     assert 0 <= lat["p50"] <= lat["p95"]
 
 
+def test_rerank_with_injected_generator_raises() -> None:
+    with pytest.raises(ValueError, match="generator"):
+        run(Path("unused"), 5, generator=FakeGenerator(), judge=FakeJudge(), rerank=True)
+
+
 def test_rerank_off_results_have_no_rerank_block(tmp_path: Path) -> None:
     res = run(_write_golden(tmp_path), 3, generator=FakeGenerator(), judge=FakeJudge())
     assert "rerank" not in res

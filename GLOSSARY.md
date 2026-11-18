@@ -25,7 +25,7 @@ A way of ranking chunks for a query: dense (by meaning), bm25 (by shared words) 
 _Avoid_: Search, ranker, index
 
 **Reranker**:
-A second stage that rescores the chunks a Retriever returned with a cross-encoder and keeps the best few. It is not a Retriever: it only reorders candidates, and its scores are on their own scale, not comparable with a Retriever's Score.
+A second stage that rescores the chunks a Retriever returned with a cross-encoder and keeps the best few. It is not a Retriever: it only reorders candidates, and on the chunks it returns the `score` field holds the cross-encoder score, replacing the Retriever's Score (a different scale: never compare the two).
 _Avoid_: Second retriever, reranking retriever
 
 **Reciprocal rank fusion**:
