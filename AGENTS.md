@@ -9,6 +9,7 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 - `src/rageval/store.py`: shared Chroma persistent client and the saved Chunk list (JSONL)
 - `src/rageval/generate.py`: retrieve top-k, answer via litellm (OpenAI gpt-4.1-mini, a different model from the gpt-4o-mini Judge); prompt in `src/rageval/prompts/answer.txt`
 - `src/rageval/eval.py`: runs the Golden set through generate + Judge (`--retriever {dense,bm25,hybrid}`, default bm25), writes `results.json` / `results.md`
+- `src/rageval/rerank.py`, `rerank_scorer.py`: optional cross-encoder Reranker (top-20 to top-k) with latency wrapper, and its lazy default scorer; needs the optional `rerank` dependency group (`uv sync --group rerank`), not installed by `make install` or CI
 - `src/rageval/cache.py`: on-disk retrieval cache (`RAGEVAL_CACHE_DIR`), never caches generation or Judge calls
 - `src/rageval/gate.py`: quality and Refusal gate over `results.json` and `eval_thresholds.json`
 - `tests/`: offline tests with a fake embedder and small fixture PDFs
