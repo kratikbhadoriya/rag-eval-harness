@@ -16,8 +16,10 @@ from typing import Any
 
 from dotenv import find_dotenv, load_dotenv
 
+from rageval import rerank_scorer
 from rageval.cache import cached_retriever
 from rageval.generate import REFUSAL_PHRASE, generate
+from rageval.rerank import CANDIDATES, Scorer, percentile, reranked_retriever
 from rageval.retrieve import DEFAULT_RETRIEVER, RETRIEVERS, RetrieverName
 
 METRICS = ("faithfulness", "context_recall")
@@ -31,6 +33,8 @@ Judge = Callable[[dict[str, Any]], dict[str, float]]
 Returns {"faithfulness", "context_recall", "input_tokens", "output_tokens", "cost"}; a metric
 the Judge could not score is NaN.
 """
+
+DEFAULT_K = 10
 
 _CITATION = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
 
@@ -137,6 +141,8 @@ def run(
     judge: Judge | None = None,
     collection: str = "default",
     retriever: RetrieverName = DEFAULT_RETRIEVER,
+    rerank: bool = False,
+    scorer: Scorer | None = None,
 ) -> dict[str, Any]:
     """Evaluate the answerable Golden set rows and return the results dict.
 
@@ -152,10 +158,24 @@ def run(
     answerable_refused {count, total} (answerable rows the generator refused: usually a retrieval
     miss, scored 0 Faithfulness).
 
+    `rerank` wraps the default generator's cached retriever in a Reranker (top-20
+    candidates, keep k; `scorer` defaults to the local cross-encoder) and adds a `rerank` block:
+    candidates, k, latency_ms {n, p50, p95} (None percentiles when n is 0). Off, no block.
+
     Raises JudgeError if a sample is still NaN after one retry.
     """
+    if rerank and generator is not None:
+        raise ValueError(
+            "rerank=True needs the default generator: an injected generator bypasses the "
+            "Reranker, so no reranking would happen"
+        )
+    timings_ms: list[float] = []
     if generator is None:
         fetch = cached_retriever(collection, retriever=retriever)
+        if rerank:
+            fetch = reranked_retriever(
+                fetch, scorer or rerank_scorer.score_pairs, timings_ms, candidates=CANDIDATES
+            )
 
         def generator(question: str, k: int) -> dict[str, Any]:
             return generate(question, k, collection=collection, retriever=fetch)
@@ -198,7 +218,7 @@ def run(
     means = {
         m: (sum(s[m] for s in samples) / len(samples) if samples else math.nan) for m in METRICS
     }
-    return {
+    results: dict[str, Any] = {
         "k": k,
         "sample": sample,
         "retriever": retriever,
@@ -217,6 +237,17 @@ def run(
             "total": len(samples),
         },
     }
+    if rerank:
+        results["rerank"] = {
+            "candidates": CANDIDATES,
+            "k": k,
+            "latency_ms": {
+                "n": len(timings_ms),
+                "p50": percentile(timings_ms, 50) if timings_ms else None,
+                "p95": percentile(timings_ms, 95) if timings_ms else None,
+            },
+        }
+    return results
 
 
 def format_markdown(results: dict[str, Any]) -> str:
@@ -336,12 +367,21 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(prog="rageval.eval", description=__doc__)
     parser.add_argument("--golden", type=Path, default=Path("golden/golden.jsonl"))
-    parser.add_argument("--k", type=int, default=10)
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=None,
+        help=f"contexts per question, also the kept count with --rerank (default {DEFAULT_K})",
+    )
     parser.add_argument("--sample", type=int, default=None, help="score n rows (stratified)")
     parser.add_argument("--collection", default="default")
     parser.add_argument("--retriever", choices=RETRIEVERS, default=DEFAULT_RETRIEVER)
+    parser.add_argument(
+        "--rerank", action="store_true", help="cross-encoder rerank the retriever top-20, keep k"
+    )
     parser.add_argument("--out-dir", type=Path, default=Path("."))
     args = parser.parse_args(argv)
+    k = args.k if args.k is not None else DEFAULT_K
 
     load_dotenv(find_dotenv(usecwd=True))
     needs_key = judge is None or generator is None
@@ -353,7 +393,14 @@ def main(
         return 2
     try:
         results = run(
-            args.golden, args.k, args.sample, generator, judge, args.collection, args.retriever
+            args.golden,
+            k,
+            args.sample,
+            generator,
+            judge,
+            args.collection,
+            args.retriever,
+            rerank=args.rerank,
         )
     except JudgeError as exc:
         print(f"error: {exc}", file=sys.stderr)

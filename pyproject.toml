@@ -34,6 +34,23 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]
+# Optional, not installed by CI: `uv sync --group rerank`. Torch is a direct dependency so the
+# CPU-only index mapping below applies. CPU, not GPU: the CPU wheel is a few hundred MB while
+# the default CUDA wheels pull multiple GB, CI and most dev machines have no GPU, and the
+# MiniLM-L-6 cross-encoder is small enough to run on CPU. Latency numbers in metrics.md are
+# CPU numbers.
+rerank = [
+    "sentence-transformers>=3.0",
+    "torch>=2.4",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", group = "rerank" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 target-version = "py312"
@@ -50,6 +67,12 @@ python_version = "3.12"
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+# sentence-transformers is only in the optional `rerank` group, which CI does not install; without
+# this, strict mypy fails there on the missing import. It is imported lazily in rerank_scorer.
+[[tool.mypy.overrides]]
+module = "sentence_transformers.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

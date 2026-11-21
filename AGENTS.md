@@ -9,6 +9,7 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 - `src/rageval/store.py`: shared Chroma persistent client and the saved Chunk list (JSONL)
 - `src/rageval/generate.py`: retrieve top-k, answer via litellm (OpenAI gpt-4.1-mini, a different model from the gpt-4o-mini Judge); prompt in `src/rageval/prompts/answer.txt`
 - `src/rageval/eval.py`: runs the Golden set through generate + Judge (`--retriever {dense,bm25,hybrid}`, default bm25), writes `results.json` / `results.md`
+- `src/rageval/rerank.py`, `rerank_scorer.py`: optional cross-encoder Reranker (top-20 to top-k) with latency wrapper, and its lazy default scorer; needs the optional `rerank` dependency group (`uv sync --group rerank`), not installed by `make install` or CI
 - `src/rageval/cache.py`: on-disk retrieval cache (`RAGEVAL_CACHE_DIR`), never caches generation or Judge calls
 - `src/rageval/gate.py`: quality and Refusal gate over `results.json` and `eval_thresholds.json`
 - `tests/`: offline tests with a fake embedder and small fixture PDFs
@@ -17,7 +18,7 @@ Python 3.12, uv, chromadb (local persistent), pymupdf, langchain-text-splitters,
 ## Commands
 
 - `make install`, `make lint`, `make fmt`, `make typecheck`, `make test`, `make check`
-- `make ingest` (ingest `data/corpus`), `make eval [SAMPLE=n]` (needs `OPENAI_API_KEY`), `make gate` (checks `results.json` against `eval_thresholds.json`)
+- `make ingest` (ingest `data/corpus`), `make eval [SAMPLE=n] [RERANK=1]` (needs `OPENAI_API_KEY`; `RERANK=1` also needs `uv sync --group rerank`), `make gate` (checks `results.json` against `eval_thresholds.json`)
 
 ## Rules
 
@@ -36,7 +37,7 @@ When `embed` is omitted, `rageval.embed.default_embed` uses Chroma's bundled ONN
 
 `RAGEVAL_CACHE_DIR` sets the retrieval cache directory (default `./.eval_cache`, gitignored); tests use a temp dir. `rageval.cache.cached_retriever` caches `retrieve` output only (never generation or Judge), keyed on question, k, collection, Retriever, chunk size and overlap (`ingest.CHUNK_SIZE`/`CHUNK_OVERLAP`), a SHA-256 of the files in `data/corpus`, and the embedder name (its `name` attribute, else module-qualified function name). Delete the directory to clear it.
 
-`make eval RETRIEVER=hybrid` (or `python -m rageval.eval --retriever {dense,bm25,hybrid}`, default `bm25`) picks the Retriever; `results.json` records `retriever` and `golden_set_version` (first 8 hex characters of the SHA-256 of the Golden set file).
+`make eval RETRIEVER=hybrid` (or `python -m rageval.eval --retriever {dense,bm25,hybrid}`, default `bm25`) picks the Retriever; `make eval RERANK=1` (or `--rerank`, any Retriever, off by default) reranks the chosen Retriever's top-20 with the local cross-encoder and keeps k (same default 10 as without, override with `--k`), and `results.json` gains a `rerank` block (candidates, k, latency_ms n/p50/p95); without it the results shape is unchanged. `results.json` records `retriever` and `golden_set_version` (first 8 hex characters of the SHA-256 of the Golden set file).
 
 ## Gate thresholds
 
