@@ -36,6 +36,31 @@ the Judge could not score is NaN.
 
 DEFAULT_K = 10
 
+DEFAULT_GOLDEN = Path("golden/golden.jsonl")
+
+
+DEFAULTS: dict[str, Any] = {
+    "golden": DEFAULT_GOLDEN,
+    "k": DEFAULT_K,
+    "sample": None,
+    "collection": "default",
+    "retriever": DEFAULT_RETRIEVER,
+    "rerank": False,
+}
+
+
+def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Return a new config with every default filled in; the one place defaults live.
+
+    Keys: golden (Golden set path), k, sample (None runs everything), collection, retriever,
+    rerank. Raises ValueError on an unknown key. `config` is not mutated.
+    """
+    unknown = sorted(set(config) - set(DEFAULTS))
+    if unknown:
+        raise ValueError(f"unknown config key(s): {', '.join(unknown)}")
+    return {**DEFAULTS, **config}
+
+
 _CITATION = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
 
 
@@ -134,19 +159,17 @@ def _score(
 
 
 def run(
-    golden_path: Path,
-    k: int,
-    sample: int | None = None,
+    config: dict[str, Any],
+    *,
     generator: Generator | None = None,
     judge: Judge | None = None,
-    collection: str = "default",
-    retriever: RetrieverName = DEFAULT_RETRIEVER,
-    rerank: bool = False,
     scorer: Scorer | None = None,
 ) -> dict[str, Any]:
     """Evaluate the answerable Golden set rows and return the results dict.
 
-    `sample` limits the Golden set with `sample_rows` (None runs everything).
+    `config` is passed through `resolve_config`, so any omitted key takes its default there (see
+    it for the keys; an unknown key raises ValueError). `sample` limits the Golden set with
+    `sample_rows` (None runs everything).
     Unanswerable rows go through the generator only (never the Judge) and are
     counted in `skipped_unanswerable` and `refusal`.
 
@@ -164,6 +187,13 @@ def run(
 
     Raises JudgeError if a sample is still NaN after one retry.
     """
+    resolved = resolve_config(config)
+    golden_path = Path(resolved["golden"])
+    k: int = resolved["k"]
+    sample: int | None = resolved["sample"]
+    collection: str = resolved["collection"]
+    retriever: RetrieverName = resolved["retriever"]
+    rerank: bool = resolved["rerank"]
     if rerank and generator is not None:
         raise ValueError(
             "rerank=True needs the default generator: an injected generator bypasses the "
@@ -366,7 +396,7 @@ def main(
     judge: Judge | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(prog="rageval.eval", description=__doc__)
-    parser.add_argument("--golden", type=Path, default=Path("golden/golden.jsonl"))
+    parser.add_argument("--golden", type=Path, default=None)
     parser.add_argument(
         "--k",
         type=int,
@@ -374,14 +404,17 @@ def main(
         help=f"contexts per question, also the kept count with --rerank (default {DEFAULT_K})",
     )
     parser.add_argument("--sample", type=int, default=None, help="score n rows (stratified)")
-    parser.add_argument("--collection", default="default")
-    parser.add_argument("--retriever", choices=RETRIEVERS, default=DEFAULT_RETRIEVER)
+    parser.add_argument("--collection", default=None)
+    parser.add_argument("--retriever", choices=RETRIEVERS, default=None)
     parser.add_argument(
-        "--rerank", action="store_true", help="cross-encoder rerank the retriever top-20, keep k"
+        "--rerank",
+        action="store_true",
+        default=None,
+        help="cross-encoder rerank the retriever top-20, keep k",
     )
     parser.add_argument("--out-dir", type=Path, default=Path("."))
     args = parser.parse_args(argv)
-    k = args.k if args.k is not None else DEFAULT_K
+    config = resolve_config({f: getattr(args, f) for f in DEFAULTS if getattr(args, f) is not None})
 
     load_dotenv(find_dotenv(usecwd=True))
     needs_key = judge is None or generator is None
@@ -392,16 +425,7 @@ def main(
         )
         return 2
     try:
-        results = run(
-            args.golden,
-            k,
-            args.sample,
-            generator,
-            judge,
-            args.collection,
-            args.retriever,
-            rerank=args.rerank,
-        )
+        results = run(config, generator=generator, judge=judge)
     except JudgeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         _print_totals(exc.input_tokens, exc.output_tokens, exc.cost)
@@ -410,8 +434,9 @@ def main(
     except json.JSONDecodeError:
         raise
     except ValueError as exc:
+        name = config["collection"]
         print(
-            f"error: {exc}\nrun `make ingest` first (collection {args.collection!r} has no chunks)",
+            f"error: {exc}\nrun `make ingest` first (collection {name!r} has no chunks)",
             file=sys.stderr,
         )
         return 2
