@@ -78,10 +78,14 @@ def test_warmup_untimed_and_one_timing_per_query() -> None:
 def test_warmup_scores_full_size_batch_untimed() -> None:
     scorer = FakeScorer({})
     timings: list[float] = []
+    # The fetch function is never called at construction (only the warm-up runs), so it is a
+    # placeholder; what matters is the batch the warm-up scorer sees.
     reranked_retriever(lambda q, k: [], scorer, timings, candidates=7)
     assert timings == []
     assert len(scorer.calls) == 1
     assert len(scorer.calls[0]) == 7
+    # Cross-encoder cost grows with text length, so the warm-up must use chunk-sized text,
+    # the size real candidates have (ingest.CHUNK_SIZE), or the first real query is still cold.
     assert all(len(text) == CHUNK_SIZE for _q, text in scorer.calls[0])
 
 

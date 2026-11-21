@@ -30,6 +30,7 @@ def stub_cross_encoder(monkeypatch: pytest.MonkeyPatch) -> type[StubCrossEncoder
     fake = types.ModuleType("sentence_transformers")
     fake.CrossEncoder = StubCrossEncoder  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "sentence_transformers", fake)
+    # `_model` is a module-level cache; reset it so every test starts with the model unloaded
     monkeypatch.setattr(rerank_scorer, "_model", None)
     return StubCrossEncoder
 
