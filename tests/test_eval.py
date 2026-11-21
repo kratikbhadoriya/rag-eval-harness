@@ -8,8 +8,9 @@ from typing import Any
 
 import pytest
 
-from rageval.eval import JudgeError, format_markdown, main, run
+from rageval.eval import DEFAULT_K, JudgeError, format_markdown, main, resolve_config, run
 from rageval.generate import REFUSAL_PHRASE
+from rageval.retrieve import DEFAULT_RETRIEVER
 
 
 def _write_golden(tmp_path: Path) -> Path:
@@ -506,3 +507,46 @@ def test_cli_rerank_flag_defaults_k_to_10_and_k_can_be_overridden(
         assert results["rerank"]["k"] == results["k"]
         ks.append(results["k"])
     assert ks == [10, 3]
+
+
+def test_resolve_config_empty_gives_every_default() -> None:
+    assert resolve_config({}) == {
+        "golden": Path("golden/golden.jsonl"),
+        "k": DEFAULT_K,
+        "sample": None,
+        "collection": "default",
+        "retriever": DEFAULT_RETRIEVER,
+        "rerank": False,
+    }
+    assert DEFAULT_K == 10
+    assert DEFAULT_RETRIEVER == "bm25"
+
+
+def test_resolve_config_keeps_explicit_values() -> None:
+    config: dict[str, Any] = {
+        "golden": Path("x.jsonl"),
+        "k": 3,
+        "sample": 5,
+        "collection": "docs",
+        "retriever": "hybrid",
+        "rerank": True,
+    }
+    assert resolve_config(config) == config
+
+
+def test_resolve_config_fills_only_missing_keys() -> None:
+    resolved = resolve_config({"k": 2})
+    assert resolved["k"] == 2
+    assert resolved["collection"] == "default"
+
+
+def test_resolve_config_unknown_key_raises_naming_it() -> None:
+    with pytest.raises(ValueError, match="retreiver"):
+        resolve_config({"retreiver": "dense"})
+
+
+def test_resolve_config_does_not_mutate_input() -> None:
+    config: dict[str, Any] = {"k": 2}
+    resolved = resolve_config(config)
+    assert config == {"k": 2}
+    assert resolved is not config

@@ -36,6 +36,29 @@ the Judge could not score is NaN.
 
 DEFAULT_K = 10
 
+DEFAULT_GOLDEN = Path("golden/golden.jsonl")
+
+
+def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Return a new config with every default filled in; the one place defaults live.
+
+    Keys: golden (Golden set path), k, sample (None runs everything), collection, retriever,
+    rerank. Raises ValueError on an unknown key. `config` is not mutated.
+    """
+    defaults: dict[str, Any] = {
+        "golden": DEFAULT_GOLDEN,
+        "k": DEFAULT_K,
+        "sample": None,
+        "collection": "default",
+        "retriever": DEFAULT_RETRIEVER,
+        "rerank": False,
+    }
+    unknown = sorted(set(config) - set(defaults))
+    if unknown:
+        raise ValueError(f"unknown config key(s): {', '.join(unknown)}")
+    return {**defaults, **config}
+
+
 _CITATION = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
 
 
