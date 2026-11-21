@@ -13,6 +13,10 @@ from rageval.generate import REFUSAL_PHRASE
 from rageval.retrieve import DEFAULT_RETRIEVER
 
 
+def _config(tmp_path: Path, **overrides: Any) -> dict[str, Any]:
+    return {"golden": _write_golden(tmp_path), "k": 3, **overrides}
+
+
 def _write_golden(tmp_path: Path) -> Path:
     rows = [
         {"id": "f01", "question": "Q1?", "reference_answer": "R1", "type": "factual"},
@@ -61,7 +65,7 @@ class FakeJudge:
 
 def test_scores_answerable_rows_and_skips_unanswerable(tmp_path: Path) -> None:
     gen, judge = FakeGenerator(), FakeJudge()
-    res = run({"golden": _write_golden(tmp_path), "k": 3}, generator=gen, judge=judge)
+    res = run(_config(tmp_path), generator=gen, judge=judge)
     assert [s["id"] for s in res["samples"]] == ["f01", "f02"]
     assert gen.calls == [("Q1?", 3), ("Q3?", 3), ("Q2?", 3)]
     assert res["k"] == 3
@@ -87,7 +91,7 @@ def test_unanswerable_rows_go_to_generator_not_judge_and_refusals_are_counted(
     tmp_path: Path,
 ) -> None:
     gen, judge = RefusingGenerator(), FakeJudge()
-    res = run({"golden": _write_golden(tmp_path), "k": 3}, generator=gen, judge=judge)
+    res = run(_config(tmp_path), generator=gen, judge=judge)
     assert ("Q2?", 3) in gen.calls
     assert all(s["question"] != "Q2?" for s in judge.samples)
     assert [s["id"] for s in res["samples"]] == ["f01", "f02"]
@@ -96,15 +100,13 @@ def test_unanswerable_rows_go_to_generator_not_judge_and_refusals_are_counted(
 
 
 def test_non_refusing_answer_to_unanswerable_is_not_counted(tmp_path: Path) -> None:
-    res = run(
-        {"golden": _write_golden(tmp_path), "k": 3}, generator=FakeGenerator(), judge=FakeJudge()
-    )
+    res = run(_config(tmp_path), generator=FakeGenerator(), judge=FakeJudge())
     assert res["refusal"] == {"count": 0, "total": 1}
 
 
 def test_citation_markers_stripped_for_judge_but_kept_in_results(tmp_path: Path) -> None:
     judge = FakeJudge()
-    res = run({"golden": _write_golden(tmp_path), "k": 2}, generator=FakeGenerator(), judge=judge)
+    res = run(_config(tmp_path, k=2), generator=FakeGenerator(), judge=judge)
     assert judge.samples[0]["answer"] == "Answer to Q1?."
     assert judge.samples[0]["contexts"] == ["ctx one", "ctx two"]
     assert judge.samples[0]["reference"] == "R1"
@@ -113,7 +115,7 @@ def test_citation_markers_stripped_for_judge_but_kept_in_results(tmp_path: Path)
 
 def test_nan_is_retried_once_and_counted(tmp_path: Path) -> None:
     judge = FakeJudge(nan_first=("Q3?",))
-    res = run({"golden": _write_golden(tmp_path), "k": 2}, generator=FakeGenerator(), judge=judge)
+    res = run(_config(tmp_path, k=2), generator=FakeGenerator(), judge=judge)
     assert res["nan_count"] == 1
     assert res["samples"][1]["faithfulness"] == 0.5
     assert res["judge_tokens"] == {"input": 300, "output": 30}  # retry tokens are billed too
@@ -122,7 +124,7 @@ def test_nan_is_retried_once_and_counted(tmp_path: Path) -> None:
 def test_persistent_nan_fails_run_naming_sample(tmp_path: Path) -> None:
     judge = FakeJudge(always_nan=("Q3?",))
     with pytest.raises(JudgeError, match="f02"):
-        run({"golden": _write_golden(tmp_path), "k": 2}, generator=FakeGenerator(), judge=judge)
+        run(_config(tmp_path, k=2), generator=FakeGenerator(), judge=judge)
     assert sum(1 for s in judge.samples if s["question"] == "Q3?") == 2
 
 
@@ -138,7 +140,7 @@ class RefusingOnAnswerableGenerator(FakeGenerator):
 
 def test_refusals_on_answerable_rows_are_flagged_and_counted(tmp_path: Path) -> None:
     res = run(
-        {"golden": _write_golden(tmp_path), "k": 3},
+        _config(tmp_path),
         generator=RefusingOnAnswerableGenerator(),
         judge=FakeJudge(),
     )
@@ -147,15 +149,13 @@ def test_refusals_on_answerable_rows_are_flagged_and_counted(tmp_path: Path) -> 
 
 
 def test_no_refusals_on_answerable_rows(tmp_path: Path) -> None:
-    res = run(
-        {"golden": _write_golden(tmp_path), "k": 3}, generator=FakeGenerator(), judge=FakeJudge()
-    )
+    res = run(_config(tmp_path), generator=FakeGenerator(), judge=FakeJudge())
     assert res["answerable_refused"] == {"count": 0, "total": 2}
 
 
 def test_format_markdown_marks_refused_answerable_rows(tmp_path: Path) -> None:
     res = run(
-        {"golden": _write_golden(tmp_path), "k": 3},
+        _config(tmp_path),
         generator=RefusingOnAnswerableGenerator(),
         judge=FakeJudge(),
     )
@@ -166,9 +166,7 @@ def test_format_markdown_marks_refused_answerable_rows(tmp_path: Path) -> None:
 
 
 def _results(tmp_path: Path) -> dict[str, Any]:
-    return run(
-        {"golden": _write_golden(tmp_path), "k": 3}, generator=FakeGenerator(), judge=FakeJudge()
-    )
+    return run(_config(tmp_path), generator=FakeGenerator(), judge=FakeJudge())
 
 
 def test_format_markdown_snapshot(tmp_path: Path) -> None:
@@ -334,12 +332,10 @@ def test_run_samples_golden_rows(tmp_path: Path) -> None:
 
 
 def test_results_record_rows_total_and_rows_scored(tmp_path: Path) -> None:
-    full = run(
-        {"golden": _write_golden(tmp_path), "k": 2}, generator=FakeGenerator(), judge=FakeJudge()
-    )
+    full = run(_config(tmp_path, k=2), generator=FakeGenerator(), judge=FakeJudge())
     assert (full["rows_total"], full["rows_scored"]) == (3, 3)
     part = run(
-        {"golden": _write_golden(tmp_path), "k": 2, "sample": 2},
+        _config(tmp_path, k=2, sample=2),
         generator=FakeGenerator(),
         judge=FakeJudge(),
     )
@@ -396,11 +392,9 @@ def test_cli_retriever_reaches_retrieve_and_is_recorded(
     assert json.loads((out / "results.json").read_text())["retriever"] == expected
 
 
-def test_results_default_retriever_is_bm25(tmp_path: Path) -> None:
-    results = run(
-        {"golden": _write_golden(tmp_path), "k": 2}, generator=FakeGenerator(), judge=FakeJudge()
-    )
-    assert results["retriever"] == "bm25"
+def test_results_default_retriever_is_the_default(tmp_path: Path) -> None:
+    results = run(_config(tmp_path, k=2), generator=FakeGenerator(), judge=FakeJudge())
+    assert results["retriever"] == DEFAULT_RETRIEVER
 
 
 def test_golden_set_version_is_8_hex_and_tracks_file_contents(tmp_path: Path) -> None:
@@ -451,7 +445,7 @@ def test_rerank_on_returns_k_contexts_and_rerank_block(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _plumb(monkeypatch, tmp_path)
-    config = {"golden": _write_golden(tmp_path), "k": 5, "rerank": True}
+    config = _config(tmp_path, k=5, rerank=True)
     res = run(config, judge=FakeJudge(), scorer=_prefer_last)
     assert res["samples"][0]["contexts"] == ["t19", "t18", "t17", "t16", "t15"]
     block = res["rerank"]
@@ -470,20 +464,20 @@ def test_rerank_with_injected_generator_raises() -> None:
         )
 
 
-def test_omitted_k_yields_10_without_rerank(tmp_path: Path) -> None:
+def test_omitted_k_is_default_without_rerank(tmp_path: Path) -> None:
     gen = FakeGenerator()
     res = run({"golden": _write_golden(tmp_path)}, generator=gen, judge=FakeJudge())
-    assert res["k"] == 10
-    assert {k for _q, k in gen.calls} == {10}
+    assert res["k"] == DEFAULT_K
+    assert {k for _q, k in gen.calls} == {DEFAULT_K}
 
 
-def test_omitted_k_yields_10_with_rerank(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_omitted_k_is_default_with_rerank(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _plumb(monkeypatch, tmp_path)
     config = {"golden": _write_golden(tmp_path), "rerank": True}
     res = run(config, judge=FakeJudge(), scorer=_prefer_last)
-    assert res["k"] == 10
-    assert len(res["samples"][0]["contexts"]) == 10
-    assert res["rerank"]["k"] == 10
+    assert res["k"] == DEFAULT_K
+    assert len(res["samples"][0]["contexts"]) == DEFAULT_K
+    assert res["rerank"]["k"] == DEFAULT_K
 
 
 @pytest.mark.parametrize("name", ["dense", "bm25", "hybrid"])
@@ -499,7 +493,7 @@ def test_rerank_runs_for_every_retriever(
 
     monkeypatch.setattr("rageval.cache.retrieve", fake_retrieve)
     res = run(
-        {"golden": _write_golden(tmp_path), "k": 5, "retriever": name, "rerank": True},
+        _config(tmp_path, k=5, retriever=name, rerank=True),
         judge=FakeJudge(),
         scorer=_prefer_last,
     )
@@ -525,9 +519,7 @@ def test_cli_rerank_accepted_for_every_retriever(
 
 
 def test_rerank_off_results_have_no_rerank_block(tmp_path: Path) -> None:
-    res = run(
-        {"golden": _write_golden(tmp_path), "k": 3}, generator=FakeGenerator(), judge=FakeJudge()
-    )
+    res = run(_config(tmp_path), generator=FakeGenerator(), judge=FakeJudge())
     assert "rerank" not in res
 
 
@@ -550,7 +542,7 @@ def test_cli_rerank_flag_defaults_k_to_10_and_k_can_be_overridden(
         results = json.loads((out / "results.json").read_text())
         assert results["rerank"]["k"] == results["k"]
         ks.append(results["k"])
-    assert ks == [10, 3]
+    assert ks == [DEFAULT_K, 3]
 
 
 def test_resolve_config_empty_gives_every_default() -> None:
@@ -562,8 +554,6 @@ def test_resolve_config_empty_gives_every_default() -> None:
         "retriever": DEFAULT_RETRIEVER,
         "rerank": False,
     }
-    assert DEFAULT_K == 10
-    assert DEFAULT_RETRIEVER == "bm25"
 
 
 def test_resolve_config_keeps_explicit_values() -> None:

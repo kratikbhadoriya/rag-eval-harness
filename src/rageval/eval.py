@@ -39,24 +39,26 @@ DEFAULT_K = 10
 DEFAULT_GOLDEN = Path("golden/golden.jsonl")
 
 
+DEFAULTS: dict[str, Any] = {
+    "golden": DEFAULT_GOLDEN,
+    "k": DEFAULT_K,
+    "sample": None,
+    "collection": "default",
+    "retriever": DEFAULT_RETRIEVER,
+    "rerank": False,
+}
+
+
 def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     """Return a new config with every default filled in; the one place defaults live.
 
     Keys: golden (Golden set path), k, sample (None runs everything), collection, retriever,
     rerank. Raises ValueError on an unknown key. `config` is not mutated.
     """
-    defaults: dict[str, Any] = {
-        "golden": DEFAULT_GOLDEN,
-        "k": DEFAULT_K,
-        "sample": None,
-        "collection": "default",
-        "retriever": DEFAULT_RETRIEVER,
-        "rerank": False,
-    }
-    unknown = sorted(set(config) - set(defaults))
+    unknown = sorted(set(config) - set(DEFAULTS))
     if unknown:
         raise ValueError(f"unknown config key(s): {', '.join(unknown)}")
-    return {**defaults, **config}
+    return {**DEFAULTS, **config}
 
 
 _CITATION = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
@@ -412,8 +414,7 @@ def main(
     )
     parser.add_argument("--out-dir", type=Path, default=Path("."))
     args = parser.parse_args(argv)
-    flags = ("golden", "k", "sample", "collection", "retriever", "rerank")
-    config = {f: getattr(args, f) for f in flags if getattr(args, f) is not None}
+    config = resolve_config({f: getattr(args, f) for f in DEFAULTS if getattr(args, f) is not None})
 
     load_dotenv(find_dotenv(usecwd=True))
     needs_key = judge is None or generator is None
@@ -433,7 +434,7 @@ def main(
     except json.JSONDecodeError:
         raise
     except ValueError as exc:
-        name = resolve_config(config)["collection"]
+        name = config["collection"]
         print(
             f"error: {exc}\nrun `make ingest` first (collection {name!r} has no chunks)",
             file=sys.stderr,
